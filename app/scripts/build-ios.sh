@@ -154,27 +154,36 @@ if [[ "${SHERPA_ONNX_IOS}" = "0" ]]; then
   warn "本次构建只能验证壳体 + 界面能编过：App 内识别、标点、声纹不可用"
   export TINGO_ASR_DISABLED=1
 else
-  # 6a. 探测 CMake toolchain（ios-cmake）；没有就下载到 build/ios-cmake/
+  # 6a. 探测 CMake toolchain（ios-cmake）。只有自建静态库那条路线（SHERPA_ONNX_STATIC_BUILD=1）
+  #     真的需要它；默认路线用官方预编译 xcframework，不需要 cmake，所以下载失败不致命。
+  TOOLCHAIN_DIR="${OUT_DIR}/ios-cmake"
   TOOLCHAIN=""
   for cand in \
-    "$APP_DIR/src-tauri/gen/apple/ios.toolchain.cmake" \
-    "$APP_DIR/src-tauri/gen/apple/toolchains/ios.toolchain.cmake" \
-    "$APP_DIR/ios/toolchains/ios.toolchain.cmake" \
-    "${OUT_DIR}/ios-cmake/ios.toolchain.cmake"; do
+    "${TAURI_DIR}/gen/apple/ios.toolchain.cmake" \
+    "${TAURI_DIR}/gen/apple/toolchains/ios.toolchain.cmake" \
+    "${APP_DIR}/ios/toolchains/ios.toolchain.cmake" \
+    "${TOOLCHAIN_DIR}/ios.toolchain.cmake"; do
     if [[ -f "${cand}" ]]; then
-      TOOLCHAIN="$cand"
+      TOOLCHAIN="${cand}"
       break
     fi
   done
   if [[ -z "${TOOLCHAIN}" ]]; then
-    mkdir -p "$REPO_ROOT/build/ios-cmake"
-    log "本地没有 toolchain，下载 $IOS_CMAKE_URL"
-    curl -fL --retry 3 --connect-timeout 20 --max-time 300 \
-      -o "${OUT_DIR}/ios-cmake/ios.toolchain.cmake" "$IOS_CMAKE_URL" \
-      || die "下载 ios.toolchain.cmake 失败（CI 里检查一下出网策略）"
-    TOOLCHAIN="${OUT_DIR}/ios-cmake/ios.toolchain.cmake"
+    mkdir -p "${TOOLCHAIN_DIR}"
+    log "本地没有 toolchain，下载 ${IOS_CMAKE_URL} → ${TOOLCHAIN_DIR}/ios.toolchain.cmake"
+    if curl -fL --retry 3 --connect-timeout 20 --max-time 300 \
+        -o "${TOOLCHAIN_DIR}/ios.toolchain.cmake" "${IOS_CMAKE_URL}"; then
+      TOOLCHAIN="${TOOLCHAIN_DIR}/ios.toolchain.cmake"
+    elif [[ "${SHERPA_ONNX_STATIC_BUILD}" = "1" ]]; then
+      die "下载 ios.toolchain.cmake 失败，而自建静态库路线必须有它（CI 里检查出网策略）"
+    else
+      warn "下载 ios.toolchain.cmake 失败：默认路线用预编译 xcframework，不需要 cmake toolchain，继续构建"
+      TOOLCHAIN=""
+    fi
   fi
-  export CMAKE_TOOLCHAIN_FILE="$TOOLCHAIN"
+  if [[ -n "${TOOLCHAIN}" ]]; then
+    export CMAKE_TOOLCHAIN_FILE="${TOOLCHAIN}"
+  fi
 
   if [ "${IOS_TARGET#*-sim}" != "$IOS_TARGET" ]; then
     export PLATFORM="${PLATFORM:-SIMULATORARM64}"
@@ -185,7 +194,7 @@ else
   export ENABLE_ARC=1 ENABLE_VISIBILITY=0 CMAKE_BUILD_TYPE=Release BUILD_SHARED_LIBS=OFF
   export IPHONEOS_DEPLOYMENT_TARGET="$DEPLOYMENT_TARGET"
 
-  log "CMAKE_TOOLCHAIN_FILE : $CMAKE_TOOLCHAIN_FILE"
+  log "CMAKE_TOOLCHAIN_FILE : ${CMAKE_TOOLCHAIN_FILE:-（默认路线不需要，未设置）}"
   log "PLATFORM             : $PLATFORM"
   log "DEPLOYMENT_TARGET    : $DEPLOYMENT_TARGET"
   log "ENABLE_BITCODE       : $ENABLE_BITCODE"
