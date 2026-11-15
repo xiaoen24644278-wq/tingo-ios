@@ -1415,7 +1415,7 @@ async fn post_demo(State(s): State<Shared>) -> ApiResult<Json<Value>> {
 
 async fn reveal(State(s): State<Shared>, UrlPath(id): UrlPath<String>) -> ApiResult<Json<Value>> {
     let dir = s.folder(&id)?;
-    let _ = crate::platform::open_path(dir);
+    let _ = crate::platform::open_path(&dir);
     Ok(Json(json!({"ok": true})))
 }
 
