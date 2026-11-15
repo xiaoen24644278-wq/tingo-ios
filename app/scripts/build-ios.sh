@@ -299,6 +299,33 @@ fi
 XCFF="${TAURI_DIR}/sherpa-onnx.xcframework"
 FRAMEWORKS_INJECTED=0
 
+# --------------------------------------- developmentTeam（tauri ios init 的硬要求）
+# `tauri ios init` 会校验 bundle.iOS.developmentTeam：为空直接报
+#   failed to create Apple configuration: `apple.development-team` is empty
+# 然后中止。CI 上没有证书，这里写占位（真正签名是使用者拿 ipa 去 Sideloadly / Xcode 做的）；
+# 有 TEAM_ID 时用真的，后续 `tauri ios build` 走自动签名。
+ensure_development_team() {
+  python3 - "${TAURI_DIR}/tauri.conf.json" "${TEAM_ID:-ABCDE12345}" <<'PY'
+import json, sys
+conf_path, team = sys.argv[1], sys.argv[2]
+with open(conf_path, encoding="utf-8") as f:
+    conf = json.load(f)
+ios = conf.setdefault("bundle", {}).setdefault("iOS", {})
+if ios.get("developmentTeam") == team:
+    print("present")
+    raise SystemExit(0)
+ios["developmentTeam"] = team
+with open(conf_path, "w", encoding="utf-8") as f:
+    json.dump(conf, f, ensure_ascii=False, indent=2)
+    f.write("\n")
+print("written")
+PY
+}
+
+ensure_development_team \
+  && log "bundle.iOS.developmentTeam 已就绪：${TEAM_ID:-ABCDE12345}（占位，只用于 init 校验）" \
+  || warn "写 developmentTeam 失败：pnpm tauri ios init 可能因 team 为空中止"
+
 inject_sherpa_framework() {
   [[ -d "${XCFF}" ]] || return 1
   sherpa_result="$(python3 - "${TAURI_DIR}/tauri.conf.json" "sherpa-onnx.xcframework" <<'PY'

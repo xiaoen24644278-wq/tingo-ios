@@ -51,7 +51,7 @@
     },
     "iOS": {
       "minimumSystemVersion": "16.0",
-      "developmentTeam": ""
+      "developmentTeam": "ABCDE12345"
     }
   },
   "plugins": {
