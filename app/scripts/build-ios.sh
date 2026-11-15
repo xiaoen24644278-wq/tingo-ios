@@ -127,6 +127,21 @@ if [[ ! -d "${SAMPLE_DIST}" ]]; then
   : > "${SAMPLE_DIST}/.gitkeep"
 fi
 
+# tauri.conf.json 的 bundle.resources 声明了 bin/tingo-recorder（macOS 的 Swift 录音子进程）。
+# iOS 上根本不会执行它，但资源清单里有这一项，文件不存在时 `tauri ios build` 会直接报
+#   failed to get resource: resource path `bin/tingo-recorder` doesn't exist
+# 所以先放一个可执行的空壳占位。touch 一下让 src-tauri/build.rs 的 mtime 判断认为它是最新的，
+# 避免它在这里用 swiftc 编出一个 macOS 二进制塞进 iOS 包里。
+RECORDER_PLACEHOLDER="${TAURI_DIR}/bin/tingo-recorder"
+if [[ ! -f "${RECORDER_PLACEHOLDER}" ]]; then
+  mkdir -p "$(dirname "${RECORDER_PLACEHOLDER}")"
+  printf '#!/bin/sh\nexit 0\n' > "${RECORDER_PLACEHOLDER}"
+  chmod +x "${RECORDER_PLACEHOLDER}"
+  log "已创建 bin/tingo-recorder 占位（iOS 不使用，只为满足资源清单）"
+fi
+[[ -x "${RECORDER_PLACEHOLDER}" ]] || chmod +x "${RECORDER_PLACEHOLDER}"
+touch "${RECORDER_PLACEHOLDER}"
+
 # ---------------------------------------------------------------- Tauri iOS 工程
 step "准备 Tauri iOS 工程（gen/apple）"
 
@@ -589,40 +604,16 @@ build_ok=0
 if ( cd "${APP_DIR}" && pnpm exec tauri "${build_args[@]}" ); then
   build_ok=1
 else
-  warn "pnpm tauri ios build 失败，改用 xcodebuild 兜底（不签名）"
-fi
-
-xcodebuild_fallback() {
-  proj_path=""
-  for proj in "${GEN_DIR}"/*.xcodeproj; do
-    if [[ -d "${proj}" ]]; then
-      proj_path="$(basename "${proj}")"
-      break
-    fi
-  done
-  [[ -n "${proj_path}" ]] || die "找不到 ${GEN_DIR}/*.xcodeproj：tauri ios init 没成功。"
-
-  xc_config="Release"
-  if [[ "${CONFIG}" == "debug" ]]; then xc_config="Debug"; fi
-  log "xcodebuild 兜底：-project ${proj_path} -scheme ${SCHEME} -configuration ${xc_config} -sdk iphoneos"
-  if ! ( cd "${GEN_DIR}" && xcrun xcodebuild \
-      -project "${proj_path}" \
-      -scheme "${SCHEME}" \
-      -configuration "${xc_config}" \
-      -sdk iphoneos \
-      -destination "generic/platform=iOS" \
-      -archivePath "${OUT_DIR}/${SCHEME}.xcarchive" \
-      IPHONEOS_DEPLOYMENT_TARGET="${DEPLOYMENT_TARGET}" \
-      CODE_SIGNING_ALLOWED=NO \
-      CODE_SIGNING_REQUIRED=NO \
-      CODE_SIGN_IDENTITY="" \
-      archive ); then
-    die "xcodebuild archive 也失败：看上面的编译错误（Rust 侧报错通常在 Xcode 的 Shell Script 阶段）。"
-  fi
-}
-
-if [[ "${build_ok}" != "1" ]]; then
-  xcodebuild_fallback
+  # 不用裸 xcodebuild 兜底：Xcode 里的 "Build Rust Code" 阶段会跑 `tauri ios xcode-script`，
+  # 它要从 gen/apple/.tauri/cli-options-server.json 读参数，那个文件只有 tauri ios build 在跑时才有，
+  # 所以裸 xcodebuild 必定以
+  #   failed to read .../cli-options-server.json; the `tauri ios dev` or `tauri ios build` command must be running
+  # 失败。这里直接给出可读的诊断。
+  die "pnpm tauri ios build 失败（见上面的错误）。
+     常见原因按出现频率排序：
+       1) bundle.resources 里的文件不存在（bin/tingo-recorder、src/tingo/sample）
+       2) sherpa-onnx.xcframework 没被工程引用（看 gen/apple/project.yml 里有没有它）
+       3) Rust 编译错误：cd app/src-tauri && cargo build --target aarch64-apple-ios 单独跑一遍看得更清楚"
 fi
 
 # 第一次构建的 self-heal：xcframework 是这一轮 cargo 阶段才下载的，而 tauri.conf.json 那会儿
