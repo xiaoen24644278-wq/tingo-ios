@@ -45,6 +45,8 @@ SHERPA_ONNX_STATIC_BUILD="${SHERPA_ONNX_STATIC_BUILD:-0}"
 SHERPA_ONNX_SKIP_DOWNLOAD="${SHERPA_ONNX_SKIP_DOWNLOAD:-0}"
 SHERPA_ONNX_ONNXRUNTIME_VERSION="${SHERPA_ONNX_ONNXRUNTIME_VERSION:-1.28.2}"
 SHERPA_ONNX_VERSION="${SHERPA_ONNX_VERSION:-2.0.1}"
+SHERPA_ONNX_SRC="${SHERPA_ONNX_SRC:-}"
+ENABLE_BITCODE="${ENABLE_BITCODE:-NO}"
 IOS_CMAKE_URL="${IOS_CMAKE_URL:-https://raw.githubusercontent.com/leetal/ios-cmake/master/ios.toolchain.cmake}"
 SHERPA_XCF_RELEASE_URL="${SHERPA_XCF_RELEASE_URL:-https://github.com/k2-fsa/sherpa-onnx/releases/download/xcframework}"
 ORT_RELEASE_URL="${ORT_RELEASE_URL:-https://github.com/csukuangfj/onnxruntime-libs/releases/download}"
@@ -258,9 +260,9 @@ else
     #     就检查 xcframework 是否存在，build.rs 里再下载已经来不及。
     XCFF="$APP_DIR/src-tauri/sherpa-onnx.xcframework"
     if [ -d "${XCFF}" ]; then
-      log "xcframework 已存在：$XCF"
+      log "xcframework 已存在：${XCFF}"
     elif [[ "${SHERPA_ONNX_SKIP_DOWNLOAD}" = "1" ]]; then
-      warn "SHERPA_ONNX_SKIP_DOWNLOAD=1 且没有 $XCF，链接阶段大概率报 framework not found"
+      warn "SHERPA_ONNX_SKIP_DOWNLOAD=1 且没有 ${XCFF}，链接阶段大概率报 framework not found"
     else
       XCFF_ZIP=""${OUT_DIR}/"sherpa-onnx-v$SHERPA_ONNX_VERSION-ios-shared-onnxruntime-static.xcframework.zip"
       mkdir -p "${OUT_DIR}"
@@ -276,7 +278,7 @@ else
         mv "${TAURI_DIR}/SherpaOnnxC.xcframework" "${XCFF}"
       fi
       [ -d "${XCFF}" ] || die "解压后没找到 sherpa-onnx.xcframework，检查 $XCFF_ZIP 的内容"
-      log "已放入：$XCF"
+      log "已放入：${XCFF}"
     fi
   fi
 fi
