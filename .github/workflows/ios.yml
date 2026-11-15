@@ -1,0 +1,70 @@
+name: iOS 未签名 ipa
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    name: 构建 Tingo-unsigned.ipa
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      CI: true
+      CONFIG: release
+      # 故意留空：CI 上没有开发者证书，产出未签名 ipa，由使用者自己用 Sideloadly / AltStore 签
+      TEAM_ID: ""
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 选择 Xcode 并确认 iOS SDK
+        run: |
+          if [[ -d /Applications/Xcode.app ]]; then
+            sudo xcode-select -s /Applications/Xcode.app
+          else
+            newest="$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+            sudo xcode-select -s "$newest"
+          fi
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: 安装 pnpm（corepack）
+        run: |
+          corepack enable
+          PM="$(node -p "require('./app/package.json').packageManager || 'pnpm@latest'")"
+          echo "packageManager=${PM}"
+          corepack prepare "${PM}" --activate || npm install -g pnpm
+          pnpm --version
+
+      - name: 安装 Rust（stable + aarch64-apple-ios）
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: 安装 xcodegen
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: brew install xcodegen
+
+      - name: 构建未签名 ipa
+        run: bash app/scripts/build-ios.sh
+
+      - name: 上传 ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tingo-unsigned-ipa
+          path: build/ios/*.ipa
+          retention-days: 14
+          if-no-files-found: error

@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# iOS 移植：构建产物与自动下载的大件不提交
+src/tingo/web/
+app/src-tauri/sherpa-onnx.xcframework
+*.ipa
+*.dSYM.zip

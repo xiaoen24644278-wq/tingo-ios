@@ -1,0 +1,28 @@
+[package]
+name = "tingo-engine"
+version = "0.5.5"
+description = "纪要的核心：识别、说话人区分、会议存储、纪要生成"
+authors = ["stardust <642720202@qq.com>"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.85"
+
+[dependencies]
+axum = { version = "0.8", features = ["multipart"] }
+base64 = "0.23.1"
+bzip2 = "0.6.1"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+faer = "0.22"
+hmac = "0.13.0"
+libc = "0.2.191"
+regex = "1.13.1"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "stream", "json"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.0"
+sherpa-onnx = { version = "2.0.1", default-features = false, features = ["static"] }
+tar = "0.4.46"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "sync"] }
+toml = "1.1.8"
+tower = { version = "0.5.3", features = ["util"] }
+tower-http = { version = "0.7.1", features = ["cors", "fs"] }
