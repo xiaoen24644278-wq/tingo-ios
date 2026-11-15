@@ -21,6 +21,10 @@ jobs:
     env:
       CI: true
       CONFIG: release
+      # crates.io 在 runner 上偶发 DNS/连接抖动：多给重试、关多路复用、延长超时
+      CARGO_NET_RETRY: "10"
+      CARGO_HTTP_TIMEOUT: "120"
+      CARGO_HTTP_MULTIPLEXING: "false"
       # 故意留空：CI 上没有开发者证书，产出未签名 ipa，由使用者自己用 Sideloadly / AltStore 签
       TEAM_ID: ""
 
@@ -57,6 +61,16 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
           HOMEBREW_NO_INSTALL_CLEANUP: 1
         run: brew install xcodegen
+
+      - name: 预热 Rust 依赖（crates.io 抖动时先拉一遍，失败不致命）
+        continue-on-error: true
+        run: |
+          cd app/src-tauri
+          for i in 1 2 3; do
+            cargo fetch --target aarch64-apple-ios && break
+            echo "第 $i 次 cargo fetch 失败，10 秒后重试"
+            sleep 10
+          done
 
       - name: 构建未签名 ipa
         run: bash app/scripts/build-ios.sh

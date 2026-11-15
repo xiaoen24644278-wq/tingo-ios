@@ -601,7 +601,10 @@ log "构建命令：pnpm exec tauri ${build_args[*]}"
 step "构建 iOS App（${CONFIG}）"
 mkdir -p "${OUT_DIR}"
 build_ok=0
+# 第一次失败常见于 crates.io 抖动（runner 上偶发 DNS 失败）：重试一次，依赖已下到本地时基本必过
 if ( cd "${APP_DIR}" && pnpm exec tauri "${build_args[@]}" ); then
+  build_ok=1
+elif { warn "第一次构建失败，10 秒后重试一次（crates.io 抖动）"; sleep 10; } && ( cd "${APP_DIR}" && pnpm exec tauri "${build_args[@]}" ); then
   build_ok=1
 else
   # 不用裸 xcodebuild 兜底：Xcode 里的 "Build Rust Code" 阶段会跑 `tauri ios xcode-script`，
