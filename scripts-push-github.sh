@@ -28,8 +28,16 @@ git add -A && git -c user.name=tingo-ios -c user.email=tingo@local commit -m "Ti
 git push -u origin "HEAD:${BRANCH}" --force
 
 echo "== 触发 iOS workflow"
-api -X POST "https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/ios.yml/dispatches" -d "{\"ref\":\"${BRANCH}\"}" >/dev/null
-sleep 5
+# 新建的 workflow 有时还没被索引，workflow_dispatch 会 404；tag push 触发（on.push.tags）更可靠，两条都试
+TAG="ios-$(date +%Y%m%d-%H%M%S)"
+git -c user.name=tingo-ios -c user.email=tingo@local tag -f "$TAG" >/dev/null 2>&1 || true
+if git push origin "refs/tags/${TAG}" --force >/dev/null 2>&1; then
+  echo "   已推 tag ${TAG} 触发"
+else
+  echo "   tag 推送失败，改用 workflow_dispatch"
+  api -X POST "https://api.github.com/repos/${OWNER}/${REPO}/actions/workflows/ios.yml/dispatches" -d "{\"ref\":\"${BRANCH}\"}" >/dev/null
+fi
+sleep 10
 echo "== 等待构建（最多 60 分钟）"
 for i in $(seq 1 120); do
   run="$(api "https://api.github.com/repos/${OWNER}/${REPO}/actions/runs?per_page=1")"
