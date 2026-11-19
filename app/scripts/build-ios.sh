@@ -52,7 +52,7 @@ SHERPA_XCF_RELEASE_URL="${SHERPA_XCF_RELEASE_URL:-https://github.com/k2-fsa/sher
 ORT_RELEASE_URL="${ORT_RELEASE_URL:-https://github.com/csukuangfj/onnxruntime-libs/releases/download}"
 
 PBUDDY="/usr/libexec/PlistBuddy"
-MIC_USAGE_TEXT="Tingo 需要麦克风来录下会议里你自己的声音，录音只保存在这台手机上。"
+MIC_USAGE_TEXT="会听HuiT 需要麦克风来录下会议里你自己的声音，录音只保存在这台手机上。"
 
 log()  { printf '\033[1;34m[ios]\033[0m %s\n' "$*"; }
 step() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
