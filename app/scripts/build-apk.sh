@@ -48,6 +48,19 @@ step "构建前端"
 [[ -f "${WEB_DIST}/index.html" ]] || die "前端产物没生成：${WEB_DIST}/index.html"
 log "前端产物就绪"
 
+# tauri.conf.json 的 bundle.resources 声明了 bin/tingo-recorder（macOS 的 Swift 录音子进程）。
+# Android 上根本不会执行它，但资源清单里有这一项，文件不存在时构建会直接失败：
+#   resource path `bin/tingo-recorder` doesn't exist
+RECORDER_PLACEHOLDER="${TAURI_DIR}/bin/tingo-recorder"
+if [[ ! -f "${RECORDER_PLACEHOLDER}" ]]; then
+  mkdir -p "$(dirname "${RECORDER_PLACEHOLDER}")"
+  printf '#!/bin/sh\nexit 0\n' > "${RECORDER_PLACEHOLDER}"
+  chmod +x "${RECORDER_PLACEHOLDER}"
+  log "已创建 bin/tingo-recorder 占位（Android 不使用，只为满足资源清单）"
+fi
+[[ -x "${RECORDER_PLACEHOLDER}" ]] || chmod +x "${RECORDER_PLACEHOLDER}"
+touch "${RECORDER_PLACEHOLDER}"
+
 step "准备 Tauri Android 工程（gen/android）"
 if [[ ! -d "${GEN_ANDROID}" ]]; then
   ( cd "${APP_DIR}" && pnpm exec tauri android init --ci ) || die "pnpm tauri android init 失败"
