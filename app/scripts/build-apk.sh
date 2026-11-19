@@ -74,6 +74,28 @@ mkdir -p "${JAVA_DIR}"
 cp -f "${KT_SRC}" "${JAVA_DIR}/TingoAudio.kt"
 log "已拷贝：${JAVA_DIR}/TingoAudio.kt"
 
+# ------------------------------------------------- Android 启动图标覆盖
+# 和 iOS 一样：tauri android init 生成的 mipmap 用的是 Tauri 默认图标，
+# 这里用我们的 1024 图按各 density 覆盖 ic_launcher / ic_launcher_round。
+ICON_1024="${TAURI_DIR}/icons/icon-1024.png"
+RES_DIR="${GEN_ANDROID}/app/src/main/res"
+if [[ -f "${ICON_1024}" && -d "${RES_DIR}" ]]; then
+  declare -A MIP=([mdpi]=48 [hdpi]=72 [xhdpi]=96 [xxhdpi]=144 [xxxhdpi]=192)
+  for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+    px="${MIP[$d]}"
+    dir="${RES_DIR}/mipmap-${d}"
+    [[ -d "${dir}" ]] || continue
+    for name in ic_launcher ic_launcher_round ic_launcher_foreground; do
+      [[ -f "${dir}/${name}.png" ]] || continue
+      sips -z "${px}" "${px}" "${ICON_1024}" --out "${dir}/${name}.png" >/dev/null 2>&1 \
+        || warn "生成 Android 图标失败：${dir}/${name}.png"
+    done
+  done
+  log "Android 启动图标已覆盖"
+else
+  warn "跳过 Android 图标覆盖（缺少 icon-1024.png 或 res 目录）"
+fi
+
 step "注入 AndroidManifest 权限"
 MANIFEST="${GEN_ANDROID}/app/src/main/AndroidManifest.xml"
 [[ -f "${MANIFEST}" ]] || die "找不到 ${MANIFEST}"

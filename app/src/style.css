@@ -1059,7 +1059,11 @@ html.is-ios .app { padding-bottom: calc(env(safe-area-inset-bottom) + 4px); } /*
      这里给收起态放开裁剪，并让按钮自己反向位移回屏幕左上角，否则手机上会没有导航入口。 */
   .app.side-narrow:not(.side-drawer) .sidebar { overflow: visible; }
   .app.side-narrow:not(.side-drawer) .side-toggle {
-    left: 8px; top: 2px; opacity: 1; pointer-events: auto;
+    /* 收起态时按钮跟着侧栏一起被推到屏幕外，这里把它反向位移回视口右上角。
+       left 用 100vw 算，避免压在欢迎页/设置页顶部的文字上。 */
+    left: calc(100vw - 56px);
+    top: max(10px, env(safe-area-inset-top));
+    opacity: 1; pointer-events: auto;
     transform: translateX(var(--side-w));
     background: var(--card); border: 1px solid var(--line);
     box-shadow: var(--shadow-pill); color: var(--text);

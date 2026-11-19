@@ -518,6 +518,25 @@ plist_apply() {
   fi
 }
 
+# ------------------------------------------------- iOS AppIcon 覆盖
+# `tauri ios init` 生成的 AppIcon.appiconset 里放的是 Tauri CLI 自带的默认图标，
+# 不会自动用 tauri.conf.json 的 bundle.icon（真机上装出来还是 Tauri 的黄青色 logo）。
+# 这里按 Contents.json 的尺寸清单，用我们的 1024 图标逐个重新生成。
+ICON_1024="${TAURI_DIR}/icons/icon-1024.png"
+ICON_SET="$(ls -d "${GEN_DIR}"/*_iOS/Assets.xcassets/AppIcon.appiconset 2>/dev/null | head -1)"
+if [[ -f "${ICON_1024}" && -d "${ICON_SET}" ]]; then
+  log "覆盖 AppIcon：${ICON_SET}"
+  python3 "${TAURI_DIR}/scripts-appicon.py" "${ICON_SET}" > /tmp/tingo-icon-sizes.txt
+  while IFS=$'\t' read -r fn px; do
+    [[ -n "${fn}" && -n "${px}" ]] || continue
+    sips -z "${px}" "${px}" "${ICON_1024}" --out "${ICON_SET}/${fn}" >/dev/null 2>&1 \
+      || warn "生成图标失败：${fn} (${px}px)"
+  done < /tmp/tingo-icon-sizes.txt
+  log "AppIcon 共处理 $(wc -l < /tmp/tingo-icon-sizes.txt) 个尺寸"
+else
+  warn "没有 AppIcon.appiconset（${ICON_SET}）或缺少 icon-1024.png，跳过图标覆盖"
+fi
+
 step "注入 iOS Info.plist（麦克风 / 后台音频 / 本地网络 / 文件共享）"
 plist_apply "${IOS_DIR}/Info.plist"
 log "Info.plist 已就绪：${IOS_DIR}/Info.plist"
