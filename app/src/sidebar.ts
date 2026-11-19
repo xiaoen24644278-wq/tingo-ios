@@ -1,6 +1,6 @@
 import { t } from "./i18n";
 import { showUpdate, updateInfo } from "./update";
-import { api, type Env, type MeetingSummary } from "./api";
+import { api, isMobile, notePlatform, type Env, type MeetingSummary } from "./api";
 import { $, $maybe, esc } from "./dom";
 import { S } from "./state";
 
@@ -29,6 +29,7 @@ export async function refreshMeetings(): Promise<void> {
 export async function refreshEnv(): Promise<void> {
   try {
     S.env = await api<Env>("/api/env");
+    notePlatform(S.env);
   } catch {
     return;
   }
@@ -47,7 +48,7 @@ export async function refreshEnv(): Promise<void> {
       e.models_downloadable ? "asr" : "about",
     ],
     [e.llm_ready ? "" : "bad", e.llm_ready ? e.llm_model : t("未配置大模型", "No LLM configured"), "llm"],
-    [e.system_audio ? "" : "warn", e.system_audio ? t("可录系统声音", "System audio available") : t("仅能录麦克风", "Microphone only"), "about"],
+    [e.system_audio || isMobile() ? "" : "warn", e.system_audio ? t("可录系统声音", "System audio available") : t("仅能录麦克风", "Microphone only"), "about"],
   ];
   const update = updateInfo()?.newer ? updateInfo() : null;
   $("#envBox").innerHTML =

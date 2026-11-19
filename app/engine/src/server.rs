@@ -559,6 +559,11 @@ async fn env(State(s): State<Shared>) -> Json<Value> {
             .unwrap_or(false);
     Json(json!({
         "version": s.opt.version,
+        // 前端按平台决定显示哪些说明（手机上没有「系统声音」「访达」「系统设置」这些概念）
+        "platform": if cfg!(target_os = "ios") { "ios" }
+            else if cfg!(target_os = "android") { "android" }
+            else if cfg!(target_os = "macos") { "macos" }
+            else { "linux" },
         "root": s.root(),
         "ffmpeg": true, // 桌面版不需要 ffmpeg
         "system_audio": system_audio_supported(&s.opt.recorder_bin),

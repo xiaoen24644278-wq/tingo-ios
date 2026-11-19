@@ -2,8 +2,21 @@
 
 import { lang, t } from "./i18n";
 
+export type Platform = "ios" | "android" | "macos" | "linux" | "windows" | "unknown";
+
+let PLATFORM: Platform = "unknown";
+/** 后端 /api/env 返回后记下平台，界面据此决定显示哪些说明 */
+export function notePlatform(e: Env): void {
+  if (e.platform) PLATFORM = e.platform;
+}
+export const platform = (): Platform => PLATFORM;
+/** iOS / Android：界面只保留手机上真正能做事的说明 */
+export const isMobile = (): boolean => PLATFORM === "ios" || PLATFORM === "android";
+
 export interface Env {
   version: string;
+  /** 运行平台：ios | android | macos | linux */
+  platform?: Platform;
   root: string;
   ffmpeg: boolean;
   system_audio: boolean;

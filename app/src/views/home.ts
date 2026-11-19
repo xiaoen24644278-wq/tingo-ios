@@ -2,7 +2,7 @@
    进度显示在玻璃面板下方和侧边栏。第一次使用时玻璃面板里下载识别模型。另含拖拽导入。 */
 
 import { t } from "../i18n";
-import { api, type Job } from "../api";
+import { api, isMobile, type Job } from "../api";
 import { $, $maybe, errorMessage, esc, ICON, main, toast } from "../dom";
 import { poll } from "../poll";
 import { isBusy, needsModels, S } from "../state";
@@ -78,7 +78,7 @@ function downloadPanel(): string {
   return `
     <div class="live-head" style="color:var(--blue)">${t("第一次使用", "First run")}</div>
     <div class="timer" style="font-size:22px;margin:12px 0 6px;font-family:var(--font)">${t(`先下载识别模型（约 ${mb} MB）`, `Download the speech model first (~${mb} MB)`)}</div>
-    <div class="proc-note">${t("只需下载一次。识别、区分说话人都在这台电脑上完成，录音不会上传。", "One-time download. Recognition and speaker separation run on this Mac — your audio is never uploaded.")}</div>
+    <div class="proc-note">${t("只需下载一次。识别、区分说话人都在这台设备上完成，录音不会上传。", "One-time download. Recognition and speaker separation run on this Mac — your audio is never uploaded.")}</div>
     <div class="glass-foot">
       <span class="spacer"></span>
       <button class="btn primary" id="dlBtn">${t("下载模型", "Download")}</button>
@@ -92,7 +92,7 @@ function idleForm(): string {
     <input class="title-input" id="fTitle" placeholder="${t("会议名称，比如：周会、项目评审", "Meeting name, e.g. Weekly sync, Design review")}" value="${esc(S.form.title)}" maxlength="60">
     <input class="hot-input" id="fHot" placeholder="${t("热词（可选）：人名、项目代号、专有名词，用逗号隔开", "Hotwords (optional): names, project codes, jargon — comma separated")}" value="${esc(S.form.hotwords)}">
     <div class="glass-foot">
-      <button class="toggle ${S.form.system && sys ? "on" : ""}" id="tSys" aria-pressed="${Boolean(S.form.system && sys)}" ${sys ? "" : `disabled title='${t("需要 macOS 15+", "Requires macOS 15+")}'`}>${ICON.monitor}${t("系统声音", "System audio")}</button>
+      ${isMobile() ? "" : `<button class="toggle ${S.form.system && sys ? "on" : ""}" id="tSys" aria-pressed="${Boolean(S.form.system && sys)}" ${sys ? "" : `disabled title='${t("需要 macOS 15+", "Requires macOS 15+")}'`}>${ICON.monitor}${t("系统声音", "System audio")}</button>`}
       <button class="toggle ${S.form.mic ? "on" : ""}" id="tMic" aria-pressed="${Boolean(S.form.mic)}">${ICON.mic}${t("麦克风", "Microphone")}</button>
       <span class="spacer"></span>
       <span class="rec-label">${t("开始录音", "Record")}</span>

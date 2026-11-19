@@ -1,6 +1,6 @@
 /* 会议详情：纪要 / 转写两个视图、回听播放器、说话人改名、编辑纪要、重新生成。 */
 
-import { api, type Job, type MeetingDetail, meetingPath, url } from "../api";
+import { api, isMobile, type Job, type MeetingDetail, meetingPath, url } from "../api";
 import { $, $$, $maybe, closeModal, color, errorMessage, esc, fmt, ICON, initial, main, openModal, toast, tsToMs } from "../dom";
 import { fishboneToText, turnResolver } from "../fishbone";
 import { renderMarkdown } from "../markdown";
@@ -385,7 +385,7 @@ function drawGen(job: Job): void {
                   )
                 : t("大模型先通读整场转写，开始动笔后内容会一节一节出现在这里。", "The model reads the whole transcript first; sections will appear here as they're written.")
             : t(
-                "识别在这台电脑上进行，录音不会上传。转写完成后接着生成纪要，不用守着，可以去开下一场会。",
+                "识别在这台设备上进行，录音不会上传。转写完成后接着生成纪要，不用守着，可以去开下一场会。",
                 "Recognition runs on this Mac — audio is never uploaded. Minutes follow right after; no need to wait here, go ahead and start the next meeting.",
               )
         }</p>`;
@@ -653,7 +653,9 @@ function bindExportMenu(d: MeetingDetail): void {
 async function exportFile(d: MeetingDetail, path: string, json?: unknown): Promise<void> {
   try {
     const r = await api<{ path: string }>(meetingPath(d.id, path), json === undefined ? { method: "POST" } : { json });
-    toast(t(`已导出 ${r.path.split("/").pop()}，已在访达中选中`, `Exported ${r.path.split("/").pop()} — shown in Finder`));
+    toast(isMobile()
+        ? t(`已导出 ${r.path.split("/").pop()}，可在「文件」App 里打开`, `Exported ${r.path.split("/").pop()} — open it from the Files app`)
+        : t(`已导出 ${r.path.split("/").pop()}，已在访达中选中`, `Exported ${r.path.split("/").pop()} — shown in Finder`));
   } catch (e) {
     toast(errorMessage(e), true);
   }
@@ -663,7 +665,9 @@ async function toPdf(d: MeetingDetail): Promise<void> {
   toast(t("正在排版 PDF…", "Laying out the PDF…"));
   try {
     const r = await api<{ path: string }>(meetingPath(d.id, "/pdf"), { json: { html: minutesDocument(d) } });
-    toast(t(`已导出 ${r.path.split("/").pop()}，已在访达中选中`, `Exported ${r.path.split("/").pop()} — shown in Finder`));
+    toast(isMobile()
+        ? t(`已导出 ${r.path.split("/").pop()}，可在「文件」App 里打开`, `Exported ${r.path.split("/").pop()} — open it from the Files app`)
+        : t(`已导出 ${r.path.split("/").pop()}，已在访达中选中`, `Exported ${r.path.split("/").pop()} — shown in Finder`));
   } catch (e) {
     toast(errorMessage(e), true);
   }

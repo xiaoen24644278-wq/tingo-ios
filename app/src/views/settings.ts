@@ -1,7 +1,7 @@
 /* 设置：左边二级菜单，右边一次只显示一项——大模型（本机中转一键选择 + 远程服务 + 自定义）、识别模型（桌面版可下载切换）、
    热词、推送到群、Obsidian、运行环境。每一项单独保存。 */
 
-import { api, type Config, type Job, type LocalProvider } from "../api";
+import { api, isMobile, type Config, type Job, type LocalProvider } from "../api";
 import { $, $$, $maybe, errorMessage, esc, ICON, main, toast } from "../dom";
 import { refreshEnv } from "../sidebar";
 import { isBusy, S } from "../state";
@@ -241,8 +241,11 @@ const tabs = (): { id: Tab; name: string; icon: keyof typeof ICON }[] => [
   { id: "lang", name: t("语言", "Language"), icon: "globe" },
   { id: "hotwords", name: t("热词", "Hotwords"), icon: "spark" },
   { id: "push", name: t("推送到群", "Share to chat"), icon: "send" },
-  { id: "obsidian", name: "Obsidian", icon: "vault" },
-  { id: "storage", name: t("存储", "Storage"), icon: "folder" },
+  // 手机上沙盒里没有外部 Obsidian 库，也不能换会议目录，这两项隐藏
+  ...(isMobile() ? [] : [
+    { id: "obsidian" as Tab, name: "Obsidian", icon: "vault" as const },
+    { id: "storage" as Tab, name: t("存储", "Storage"), icon: "folder" as const },
+  ]),
   { id: "about", name: t("运行环境", "About"), icon: "monitor" },
 ];
 
@@ -1008,15 +1011,19 @@ function bindUpdateButton(): void {
 
 function panelAbout(x: Ctx): void {
   const env = S.env;
+  const mobile = isMobile();
   const checks: [boolean, string, string][] = [
-    ...(env?.models_downloadable ? [] : ([[!!env?.ffmpeg, "ffmpeg", env?.ffmpeg ? t("已安装", "Installed") : "brew install ffmpeg"]] as [boolean, string, string][])),
-    [
-      !!env?.system_audio,
-      t("录系统声音", "System audio"),
-      env?.system_audio
-        ? t("可以录腾讯会议、飞书里对方的声音", "Can record the other side in Zoom, Teams, Tencent Meeting, Feishu…")
-        : t("需要 macOS 15+ 和 Xcode 命令行工具；不影响导入录音", "Needs macOS 15+ and Xcode Command Line Tools; importing recordings still works"),
-    ],
+    // 手机上不需要 ffmpeg（引擎已内置解码），也不存在「系统声音」这件事
+    ...(env?.models_downloadable || mobile ? [] : ([[!!env?.ffmpeg, "ffmpeg", env?.ffmpeg ? t("已安装", "Installed") : "brew install ffmpeg"]] as [boolean, string, string][])),
+    mobile
+      ? [true, t("录音方式", "Recording"), t("麦克风录音；手机上录不到别的 App 里的声音", "Microphone only — other apps' audio can't be captured on phones")]
+      : [
+          !!env?.system_audio,
+          t("录系统声音", "System audio"),
+          env?.system_audio
+            ? t("可以录腾讯会议、飞书里对方的声音", "Can record the other side in Zoom, Teams, Tencent Meeting, Feishu…")
+            : t("需要 macOS 15+ 和 Xcode 命令行工具；不影响导入录音", "Needs macOS 15+ and Xcode Command Line Tools; importing recordings still works"),
+        ],
     [
       !!env?.model_cached,
       t("识别模型", "Speech model"),
@@ -1027,12 +1034,18 @@ function panelAbout(x: Ctx): void {
   $("#sPanel").innerHTML = `
     <h2>${t("运行环境", "About")}</h2>
     <div class="kv">
-      <div><span>${t("会议保存在", "Meetings")}</span><code>${esc(env?.root ?? "")}</code></div>
-      <div><span>${t("配置文件", "Config")}</span><code>${esc(x.c.path)}</code></div>
+      ${
+        mobile
+          ? `<div><span>${t("会议保存在", "Meetings")}</span><code>${t("「文件」App → HuiT", "Files app → HuiT")}</code></div>`
+          : `<div><span>${t("会议保存在", "Meetings")}</span><code>${esc(env?.root ?? "")}</code></div>
+      <div><span>${t("配置文件", "Config")}</span><code>${esc(x.c.path)}</code></div>`
+      }
       <div><span>${t("版本", "Version")}</span><code>${esc(env?.version ?? "")}</code></div>
     </div>
     <div class="about-actions">
-      <button class="btn" id="sUpd">${ICON.redo}${t("检查更新", "Check for updates")}</button><span class="test-msg" id="sUpdMsg"></span>
+      ${mobile
+        ? `<span class="hint-inline">${t("手机版更新：重新安装新版本即可，会议记录不会丢", "To update on mobile, install a newer build — your meetings are kept")}</span>`
+        : `<button class="btn" id="sUpd">${ICON.redo}${t("检查更新", "Check for updates")}</button><span class="test-msg" id="sUpdMsg"></span>`}
       <span class="grow"></span>
       <a class="btn ghost" href="#/welcome">${t("重新打开新手引导", "Reopen the tour")}</a>
     </div>
@@ -1043,5 +1056,5 @@ function panelAbout(x: Ctx): void {
             `<div class="check"><span class="dot" style="background:${ok ? "var(--green)" : "var(--amber)"}"></span>${name}<small>${esc(note)}</small></div>`,
         )
         .join("")}
-    </div>`;  bindUpdateButton();
+    </div>`;  if (!mobile) bindUpdateButton();
 }
