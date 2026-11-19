@@ -93,8 +93,9 @@ if [[ -f "${ICON_1024}" && -d "${RES_DIR}" ]]; then
     d="${pair%%:*}"; px="${pair##*:}"
     dir="${RES_DIR}/mipmap-${d}"
     [[ -d "${dir}" ]] || continue
+    # 不判断文件是否存在：Tauri 模板可能只给 anydpi-v26 的自适应图标 XML，
+    # 没有 mipmap-*/ic_launcher.png，这里必须无条件生成，否则删掉 XML 后图标就没了。
     for name in ic_launcher ic_launcher_round; do
-      [[ -f "${dir}/${name}.png" ]] || continue
       scale_png "${ICON_1024}" "${dir}/${name}.png" "${px}" \
         || warn "生成 Android 图标失败：${dir}/${name}.png"
     done
