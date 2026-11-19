@@ -17,8 +17,8 @@ GEN_ANDROID="${TAURI_DIR}/gen/android"
 WEB_DIST="${REPO_ROOT}/src/tingo/web"
 KT_SRC="${APP_DIR}/android/TingoAudio.kt"
 OUT_DIR="${REPO_ROOT}/build/android"
-ABIS="${ABIS:-arm64,armv7}"
-RELEASE="${RELEASE:-0}"
+ABIS="${ABIS:-arm64}"
+RELEASE="${RELEASE:-1}"
 PKG_PATH="com/hui/ting"
 
 log()  { printf '\033[1;34m[apk]\033[0m %s\n' "$*"; }
@@ -104,20 +104,23 @@ PY
 
 step "构建 APK"
 mkdir -p "${OUT_DIR}"
-ARGS=( android build )
-if [[ "${RELEASE}" == "1" ]]; then
-  ARGS+=( --apk )
-else
-  ARGS+=( --apk --debug )
+ARGS=( android build --apk )
+if [[ "${RELEASE}" != "1" ]]; then
+  ARGS+=( --debug )
 fi
-for abi in ${ABIS//,/ }; do
-  case "$abi" in
-    arm64) ARGS+=( --target aarch64 ) ;;
-    armv7) ARGS+=( --target armv7 ) ;;
-    x86_64) ARGS+=( --target x86_64 ) ;;
-    *) warn "未知 ABI：$abi（跳过）" ;;
-  esac
-done
+# --target 只能给一个：给多个会退化成 universal 包，四个 ABI 各编一份 Rust 库，
+# 直接把 runner 的磁盘撑爆（实测 docker 里 14G 用尽，packageUniversalRelease 报 No space left）。
+# 默认只出 arm64：覆盖 2017 年之后几乎所有 Android 手机。
+first_abi="$(printf '%s' "${ABIS}" | cut -d, -f1)"
+case "${first_abi}" in
+  arm64)  ARGS+=( --target aarch64 ) ;;
+  armv7)  ARGS+=( --target armv7 ) ;;
+  x86_64) ARGS+=( --target x86_64 ) ;;
+  *) warn "未知 ABI：${first_abi}，按 arm64 处理"; ARGS+=( --target aarch64 ) ;;
+esac
+if [[ "${ABIS}" == *,* ]]; then
+  warn "只构建第一个 ABI（${first_abi}）：多 ABI 会让磁盘不够用；确实需要时用 ABIS=arm64,armv7 RELEASE=1 并准备更大的 runner"
+fi
 log "构建命令：pnpm exec tauri ${ARGS[*]}"
 ( cd "${APP_DIR}" && pnpm exec tauri "${ARGS[@]}" ) || die "tauri android build 失败：看上面的 Gradle / Rust 报错"
 
