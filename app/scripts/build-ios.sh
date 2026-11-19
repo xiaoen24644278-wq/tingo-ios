@@ -538,6 +538,17 @@ else
   warn "没有 AppIcon.appiconset（${ICON_SET}）或缺少 icon-1024.png，跳过图标覆盖"
 fi
 
+# ------------------------------------------------- 原生启动画面改黑底
+# 前端有一层黑底 + logo 的启动遮罩（index.html 的 #splash），淡出后进入界面。
+# 如果系统 LaunchScreen 还是白色，会先闪一下白再变黑。这里把 storyboard 的背景色
+# 改成和遮罩一致的 #0B0E17，两段就接成一段。
+LAUNCH_SB="$(find "${GEN_DIR}" -name "LaunchScreen.storyboard" 2>/dev/null | head -1 || true)"
+if [[ -n "${LAUNCH_SB}" && -f "${LAUNCH_SB}" ]]; then
+  python3 "${TAURI_DIR}/scripts-launchscreen.py" "${LAUNCH_SB}"
+else
+  warn "没找到 LaunchScreen.storyboard，跳过启动画面改色"
+fi
+
 step "注入 iOS Info.plist（麦克风 / 后台音频 / 本地网络 / 文件共享）"
 plist_apply "${IOS_DIR}/Info.plist"
 log "Info.plist 已就绪：${IOS_DIR}/Info.plist"
