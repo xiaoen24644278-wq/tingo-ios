@@ -547,7 +547,7 @@ async function panelStorage(): Promise<void> {
       const destination = path.value.trim();
       const copyExisting = copy.checked;
       if (!(await confirmBox(t("切换会议存储目录？", "Switch meeting folder?"),
-        copyExisting ? t(`将会议复制到 ${destination}，完成后切换。原目录保留，请勿在复制期间退出 Tingo。`, `Copy meetings to ${destination}, then switch. Originals are kept. Keep Tingo open until finished.`)
+        copyExisting ? t(`将会议复制到 ${destination}，完成后切换。原目录保留，请勿在复制期间退出 HuiT。`, `Copy meetings to ${destination}, then switch. Originals are kept. Keep HuiT open until finished.`)
         : t(`切换到 ${destination}。只显示新目录中的会议；旧会议保留原处，可切回原目录查看。`, `Switch to ${destination}. Only meetings in that folder will be shown; you can switch back to see the originals.`), t("确认切换", "Switch folder")))) return;
       working = true;
       path.disabled = copy.disabled = choose.disabled = true;
@@ -635,7 +635,7 @@ function panelRecord(x: Ctx): void {
   const cur = String(c.auto_stop_silence_min ?? 10);
   $("#sPanel").innerHTML = `
     <h2>${t("录音", "Recording")}</h2>
-    <p class="hint">${t("忘了点结束也没关系：会开完、没人说话了就自动结束，并把末尾的空白截掉。", "Forgot to stop? Tingo ends the recording when the meeting is over and trims the silent tail.")}</p>
+    <p class="hint">${t("忘了点结束也没关系：会开完、没人说话了就自动结束，并把末尾的空白截掉。", "Forgot to stop? HuiT ends the recording when the meeting is over and trims the silent tail.")}</p>
     <div class="s-grid">
       <div class="field"><label>${t("连续多久没人说话就自动结束", "Stop automatically after this much silence")}</label>
         ${segChoice(

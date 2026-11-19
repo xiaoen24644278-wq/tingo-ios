@@ -1,4 +1,4 @@
-/* 新手引导：第一次打开时走一遍——认识 Tingo、下载识别模型、试录 3 秒确认权限、接上大模型、看示例会议。
+/* 新手引导：第一次打开时走一遍——认识会听、下载识别模型、试录 3 秒确认权限、接上大模型、看示例会议。
    每一步都可以跳过；走完（或点"跳过引导"）后记在 localStorage，不再自动弹出，设置 → 运行环境里可以重新打开。 */
 
 import { api, type Job } from "../api";
@@ -42,7 +42,7 @@ export function renderWelcome(at?: string): void {
 
 function stepNames(): Record<Step, string> {
   return {
-    hello: t("认识 Tingo", "Welcome"),
+    hello: t("认识会听", "Welcome"),
     model: t("识别模型", "Speech model"),
     perm: t("录音权限", "Permissions"),
     llm: t("大模型", "LLM"),
@@ -89,7 +89,7 @@ const BODY: Record<Step, () => void> = {
     $("#wlBody").innerHTML = `
       <img src="data:image/svg+xml,${encodeURIComponent(document.querySelector(".brand-mark svg")?.outerHTML.replace("<svg", "<svg xmlns='http://www.w3.org/2000/svg'") ?? "")}" class="wl-logo" alt="">
       <h1>${t("开过的会，都听过。", "Every meeting, heard.")}</h1>
-      <p class="hint">${t("Tingo 录下会议，在这台 Mac 上转文字、分清谁说了什么，再由你选的大模型整理成纪要。花一分钟走完下面几步就能用。", "Tingo records your meetings, transcribes them on this Mac, tells speakers apart, and has the LLM you choose write the minutes. Take a minute to set it up.")}</p>
+      <p class="hint">${t("HuiT 录下会议，在这台 Mac 上转文字、分清谁说了什么，再由你选的大模型整理成纪要。花一分钟走完下面几步就能用。", "HuiT records your meetings, transcribes them on this Mac, tells speakers apart, and has the LLM you choose write the minutes. Take a minute to set it up.")}</p>
       <ul class="wl-points">
         <li>${ICON.mic}<span><b>${t("录音不出本机", "Audio stays on your Mac")}</b>${t("识别、区分说话人都在本地完成", "Recognition and speaker separation run locally")}</span></li>
         <li>${ICON.monitor}<span><b>${t("直接录线上会议", "Records any call")}</b>${t("腾讯会议、飞书、Zoom 里对方的声音都能录", "Captures the other side in Zoom, Teams, Feishu…")}</span></li>
@@ -148,8 +148,8 @@ const BODY: Record<Step, () => void> = {
     box.innerHTML = `
       <h2>${t("录音权限", "Recording permissions")}</h2>
       <p class="hint">${t(
-        "Tingo 要两个权限：「麦克风」录你说的话，「屏幕与系统录音」录会议软件里对方的声音（只录声音，不录画面）。点下面的按钮试录 3 秒，系统会弹窗请求权限。试录时可以随便说句话、放点声音。",
-        "Tingo needs two permissions: Microphone for your voice, and Screen & System Audio Recording for the other side of the call (audio only, never the screen). Click below to test for 3 seconds — macOS will ask for permission. Say something and play some audio while it tests.",
+        "HuiT 要两个权限：「麦克风」录你说的话，「屏幕与系统录音」录会议软件里对方的声音（只录声音，不录画面）。点下面的按钮试录 3 秒，系统会弹窗请求权限。试录时可以随便说句话、放点声音。",
+        "HuiT needs two permissions: Microphone for your voice, and Screen & System Audio Recording for the other side of the call (audio only, never the screen). Click below to test for 3 seconds — macOS will ask for permission. Say something and play some audio while it tests.",
       )}</p>
       <button class="btn primary" id="wlTest">${ICON.mic}${t("试录 3 秒", "Test for 3 seconds")}</button>
       ${
@@ -161,8 +161,8 @@ const BODY: Record<Step, () => void> = {
         ${
           permResult.system === "denied" || permResult.mic === "denied"
             ? `<p class="hint">${t(
-                "去「系统设置 → 隐私与安全性」，在「麦克风」和「屏幕与系统录音」里打开 Tingo，然后退出再重新打开 Tingo。之前拒绝过的话，可以在终端运行 <code>tccutil reset Microphone io.github.tancheng33.tingo</code> 和 <code>tccutil reset ScreenCapture io.github.tancheng33.tingo</code> 后重试。",
-                "Open System Settings → Privacy & Security, turn Tingo on under Microphone and Screen & System Audio Recording, then quit and reopen Tingo. If you denied it before, run <code>tccutil reset Microphone io.github.tancheng33.tingo</code> and <code>tccutil reset ScreenCapture io.github.tancheng33.tingo</code> in Terminal and try again.",
+                "去「系统设置 → 隐私与安全性」，在「麦克风」和「屏幕与系统录音」里打开 HuiT，然后退出再重新打开 HuiT。之前拒绝过的话，可以在终端运行 <code>tccutil reset Microphone io.github.tancheng33.tingo</code> 和 <code>tccutil reset ScreenCapture io.github.tancheng33.tingo</code> 后重试。",
+                "Open System Settings → Privacy & Security, turn HuiT on under Microphone and Screen & System Audio Recording, then quit and reopen HuiT. If you denied it before, run <code>tccutil reset Microphone io.github.tancheng33.tingo</code> and <code>tccutil reset ScreenCapture io.github.tancheng33.tingo</code> in Terminal and try again.",
               )}</p>`
             : ""
         }

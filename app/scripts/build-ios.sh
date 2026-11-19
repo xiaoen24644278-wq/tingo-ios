@@ -496,6 +496,10 @@ plist_apply() {
   pb_del ":MinimumOSVersion"
   pb_add ":MinimumOSVersion" "string ${DEPLOYMENT_TARGET}"
 
+  # 主屏显示名用中文（CFBundleName 保持 ASCII 的 HuiT，避免 Xcode 工程/路径出问题）
+  pb_del ":CFBundleDisplayName"
+  pb_add ":CFBundleDisplayName" "string 会听HuiT"
+
   for key in NSMicrophoneUsageDescription UIBackgroundModes NSAppTransportSecurity \
              UIFileSharingEnabled LSSupportsOpeningDocumentsInPlace \
              ITSAppUsesNonExemptEncryption MinimumOSVersion; do
