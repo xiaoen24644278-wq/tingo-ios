@@ -523,10 +523,11 @@ plist_apply() {
 # 不会自动用 tauri.conf.json 的 bundle.icon（真机上装出来还是 Tauri 的黄青色 logo）。
 # 这里按 Contents.json 的尺寸清单，用我们的 1024 图标逐个重新生成。
 ICON_1024="${TAURI_DIR}/icons/icon-1024.png"
-ICON_SET="$(ls -d "${GEN_DIR}"/*_iOS/Assets.xcassets/AppIcon.appiconset 2>/dev/null | head -1)"
-if [[ -f "${ICON_1024}" && -d "${ICON_SET}" ]]; then
+# 用 find 而不是 ls：set -euo pipefail 下 ls 找不到会直接让脚本静默退出
+ICON_SET="$(find "${GEN_DIR}" -type d -name "AppIcon.appiconset" 2>/dev/null | head -1 || true)"
+if [[ -f "${ICON_1024}" && -n "${ICON_SET}" && -d "${ICON_SET}" ]]; then
   log "覆盖 AppIcon：${ICON_SET}"
-  python3 "${TAURI_DIR}/scripts-appicon.py" "${ICON_SET}" > /tmp/tingo-icon-sizes.txt
+  python3 "${TAURI_DIR}/scripts-appicon.py" "${ICON_SET}" > /tmp/tingo-icon-sizes.txt || warn "生成图标尺寸清单失败"
   while IFS=$'\t' read -r fn px; do
     [[ -n "${fn}" && -n "${px}" ]] || continue
     sips -z "${px}" "${px}" "${ICON_1024}" --out "${ICON_SET}/${fn}" >/dev/null 2>&1 \
