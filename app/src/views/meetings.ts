@@ -15,7 +15,7 @@ export function renderMeetings(): void {
   main().innerHTML = `
     <div class="page">
       <div class="page-head">
-        <div><h1>${t("会议<em>.</em>记录", "Meetings<em>.</em>")}</h1><div class="sub" id="mCount"></div></div>
+        <div><h1>${t("会议记录", "Meetings")}</h1><div class="sub" id="mCount"></div></div>
         <span class="grow"></span>
         <label class="search">${ICON.search}<input class="input" id="mSearch" placeholder="${t("搜索会议里说过的话", "Search everything that was said")}"><kbd aria-hidden="true">${searchShortcut()}</kbd></label>
       </div>

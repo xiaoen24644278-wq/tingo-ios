@@ -1062,7 +1062,9 @@ html.is-ios .app { padding-bottom: calc(env(safe-area-inset-bottom) + 4px); } /*
     /* 收起态时按钮跟着侧栏一起被推到屏幕外，这里把它反向位移回视口右上角。
        left 用 100vw 算，避免压在欢迎页/设置页顶部的文字上。 */
     left: calc(100vw - 56px);
-    top: max(10px, env(safe-area-inset-top));
+    /* 侧栏自身已经按安全区做了 padding，按钮再吃一次 safe-area 就会掉到搜索框那一行，
+       这里减掉一段让它和页面标题（h1）居中平齐 */
+    top: max(18px, calc(env(safe-area-inset-top) - 32px));
     opacity: 1; pointer-events: auto;
     transform: translateX(var(--side-w));
     background: var(--card); border: 1px solid var(--line);
@@ -1135,7 +1137,12 @@ html.is-ios .app { padding-bottom: calc(env(safe-area-inset-bottom) + 4px); } /*
 @media (max-width: 820px) {
   /* 运行环境：一行一条，窄屏不挤成三列 */
   .checks .check { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 10px 0; }
-  .checks .check small { flex: 1 1 100%; margin-left: 18px; }
+  .checks .check small {
+    flex: 1 1 100%;
+    margin-left: 0;          /* 桌面是 margin-left:auto（靠右），手机上取消 */
+    padding-left: 18px;       /* 和圆点+标题的首字对齐 */
+    text-align: left;         /* 桌面是 text-align:right，手机上要跟标题左对齐 */
+  }
 
   /* 首页主按钮（开始录音 / 导入）：拇指好按 */
   #recStart, #importBtn, .hero .btn.primary { min-height: 52px; font-size: 16px; }
@@ -1153,4 +1160,11 @@ html.is-ios .app { padding-bottom: calc(env(safe-area-inset-bottom) + 4px); } /*
 
   /* 底部操作条避开 Home 指示条 */
   .player, .rec-bar { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+}
+
+/* 手机上顶部右侧给浮动菜单按钮让位（否则会压住搜索框和右侧按钮） */
+@media (max-width: 820px) {
+  .page > .head, .page > .top, .page > h1, .page > .bar { padding-right: 56px; }
+  .search { margin-right: 0; }
+  .search kbd { display: none; }   /* 手机上用不到 ⌘K 这类快捷键提示，也不占位 */
 }
