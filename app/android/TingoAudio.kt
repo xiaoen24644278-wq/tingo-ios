@@ -349,7 +349,7 @@ object TingoAudio {
             muxer = MediaMuxer(target.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
 
             val info = MediaCodec.BufferInfo()
-            raf.seek(HEADER)
+            raf.seek(HEADER.toLong())
             var muxStarted = false
             var trackIndex = -1
             var eos = false
