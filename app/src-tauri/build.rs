@@ -15,7 +15,9 @@ fn main() {
 
     // macOS 才需要把 Swift 录音组件编成可执行文件；iOS 上录音是进程内的 TingoAudio.swift，
     // 这里生成的 bin/tingo-recorder 只是满足 bundle.resources 清单的空壳占位（由构建脚本创建）。
-    if target_os == "ios" {
+    if target_os == "ios" || target_os == "android" {
+        // 手机上录音是进程内的（iOS: TingoAudio.swift / Android: TingoAudio.kt），
+        // 不需要也不应该在这里调 swiftc 编 macOS 二进制（Linux 的 Android 构建机上根本没有 macOS SDK）。
         tauri_build::build();
         return;
     }

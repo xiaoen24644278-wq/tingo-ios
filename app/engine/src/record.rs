@@ -287,6 +287,23 @@ pub fn trash(_bin: &Path, path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Android 沙盒同样没有系统废纸篓：删掉的东西挪到 `.tingo-trash/`，界面上「可恢复」的语义不变。
+#[cfg(target_os = "android")]
+pub fn trash(_bin: &Path, path: &Path) -> Result<(), String> {
+    let failed = |e: &str| tr(&format!("没能删掉：{e}"), &format!("Couldn't delete: {e}")).to_string();
+    let Some(name) = path.file_name() else {
+        return Err(failed("路径没有文件名"));
+    };
+    let Some(parent) = path.parent() else {
+        return Err(failed("路径没有上级目录"));
+    };
+    let box_dir = parent.join(".tingo-trash");
+    std::fs::create_dir_all(&box_dir).map_err(|e| failed(&e.to_string()))?;
+    let dest = box_dir.join(format!("{}-{}", rand_suffix(), name.to_string_lossy()));
+    std::fs::rename(path, &dest).map_err(|e| failed(&e.to_string()))?;
+    Ok(())
+}
+
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 fn find_in_path(name: &str) -> Option<PathBuf> {
     std::env::split_paths(&std::env::var_os("PATH")?).map(|d| d.join(name)).find(|p| p.is_file())
