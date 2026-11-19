@@ -39,8 +39,14 @@ object TingoAudio {
     private const val SR = 16000
     private const val HEADER = 44
 
-    // Tauri 的 Rust 库已经加载，这里只需要把 JavaVM 交给 Rust（Rust 靠它回调本类）。
-    // object 初始化是惰性的：Rust 第一次反射调用本类时会触发它。
+    @Volatile private var errText: String = ""
+
+    private fun setErr(msg: String) { errText = msg }
+
+    @JvmStatic fun lastError(): String = errText
+
+    // Tauri 的 Rust 库已经加载好，这里只需把 JavaVM 交给 Rust（Rust 靠它回调本类）。
+    // Kotlin object 的初始化是惰性的：Rust 第一次反射访问本类时触发。
     init {
         try {
             initNative()
@@ -48,12 +54,6 @@ object TingoAudio {
             errText = "音频桥初始化失败：${t.message}"
         }
     }
-
-    @Volatile private var errText: String = ""
-
-    private fun setErr(msg: String) { errText = msg }
-
-    @JvmStatic fun lastError(): String = errText
 
     @JvmStatic fun takeError(): String {
         val s = errText
