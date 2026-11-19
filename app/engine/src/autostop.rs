@@ -11,7 +11,7 @@ pub const VOICE_LEVEL: f32 = 0.4;
 pub const KEEP_AFTER_S: f64 = 30.0;
 
 /// 会议软件的进程名（比较时忽略大小写）
-#[cfg_attr(target_os = "ios", allow(dead_code))]
+#[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
 pub const MEETING_APPS: [&str; 13] = [
     "zoom.us",
     "腾讯会议",
@@ -29,7 +29,7 @@ pub const MEETING_APPS: [&str; 13] = [
 ];
 
 /// `ps -axo comm=` 的输出里出现的会议软件（小写的进程名）。每行取最后一段路径来比。
-#[cfg_attr(target_os = "ios", allow(dead_code))]
+#[cfg_attr(any(target_os = "ios", target_os = "android"), allow(dead_code))]
 pub fn meeting_apps_in(ps: &str) -> BTreeSet<String> {
     let wanted: Vec<String> = MEETING_APPS.iter().map(|a| a.to_lowercase()).collect();
     ps.lines()
@@ -44,12 +44,12 @@ pub fn meeting_apps_in(ps: &str) -> BTreeSet<String> {
 ///
 /// iOS 上没有其它 App 的进程列表（沙盒隔离），「会议软件退出就自动结束录音」这个开关在
 /// iOS 上自然失效，只剩「连续 N 分钟没人说话」那条规则；界面上的开关会被 /api/env 关掉。
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "android"))]
 pub fn running_meeting_apps() -> BTreeSet<String> {
     BTreeSet::new()
 }
 
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn running_meeting_apps() -> BTreeSet<String> {
     std::process::Command::new("/bin/ps")
         .args(["-axo", "comm="])

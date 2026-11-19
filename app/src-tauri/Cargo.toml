@@ -22,7 +22,7 @@ tingo-engine = { version = "0.5.5", path = "../engine" }
 tokio = { version = "1.54.1", features = ["rt-multi-thread"] }
 
 # 应用内自更新只有 macOS 版有；iOS 走 App Store / 重签名安装（见 src/updater_ios.rs）
-[target.'cfg(not(target_os = "ios"))'.dependencies]
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 tauri-plugin-updater = "2.14.1"
 
 [profile.release]

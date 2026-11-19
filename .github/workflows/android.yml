@@ -1,0 +1,74 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    name: 构建 HuiT APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CI: true
+      CARGO_NET_RETRY: "10"
+      CARGO_HTTP_TIMEOUT: "120"
+      CARGO_HTTP_MULTIPLEXING: "false"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: 安装 Android SDK 与 NDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 NDK 27 与构建工具
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "ndk;27.0.12077973" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> "$GITHUB_ENV"
+
+      - name: 安装 pnpm
+        run: |
+          corepack enable
+          PM="$(node -p "require('./app/package.json').packageManager || 'pnpm@latest'")"
+          corepack prepare "$PM" --activate || npm install -g pnpm
+
+      - name: 安装 Rust 与 Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: 预热 Rust 依赖
+        continue-on-error: true
+        run: |
+          cd app/src-tauri
+          for i in 1 2 3; do
+            cargo fetch --target aarch64-linux-android && break
+            sleep 10
+          done
+
+      - name: 构建 APK
+        run: bash app/scripts/build-apk.sh
+
+      - name: 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: HuiT-android-apk
+          path: build/android/*.apk
+          retention-days: 14
+          if-no-files-found: error

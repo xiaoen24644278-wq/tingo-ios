@@ -53,6 +53,9 @@
     "iOS": {
       "minimumSystemVersion": "16.0",
       "developmentTeam": "ABCDE12345"
+    },
+    "android": {
+      "minSdkVersion": 24
     }
   },
   "plugins": {

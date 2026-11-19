@@ -22,7 +22,7 @@ pub struct Status {
 #[derive(Default)]
 pub struct NativeUpdater;
 
-const HINT: &str = "iOS 版没有应用内更新：新版请重新签名安装，或在 App Store / TestFlight 里更新。";
+const HINT: &str = "手机版没有应用内更新：新版请重新安装安装包（iOS 重签名 / Android 覆盖安装 APK）。";
 
 impl NativeUpdater {
     fn status(&self, app: &AppHandle) -> Status {

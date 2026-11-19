@@ -13,9 +13,9 @@
 //! | 识别模型 | App 数据目录 `models/`，首次在界面里下载 | 同上 |
 //! | 更新 | tauri-plugin-updater 自更新 | 不适用（重签名安装 / App Store） |
 
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod updater;
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "android"))]
 #[path = "updater_ios.rs"]
 mod updater;
 
@@ -67,12 +67,20 @@ fn migrate_models(data: &std::path::Path) {
 
 fn start_backend(app: &tauri::App, state: Arc<Backend>) -> Result<(), String> {
     let data = app.path().app_data_dir().map_err(|e| e.to_string())?;
+
+    // Android 的 Java 层没有 HOME 环境变量，而 engine 用 HOME 拼「会议目录 / 配置目录」。
+    // 这里把 HOME 指到 App 私有目录，engine 里所有路径逻辑就都不用改。
+    #[cfg(target_os = "android")]
+    {
+        let _ = std::fs::create_dir_all(&data);
+        std::env::set_var("HOME", &data);
+    }
     #[cfg(not(target_os = "ios"))]
     migrate_models(&data);
     let resources = app.path().resource_dir().map_err(|e| e.to_string())?;
     // iOS 上没有子进程录音组件：路径给一个不存在的文件，engine 会据此把「系统声音」判为不可用，
     // 界面自动隐藏那个开关（/api/env 的 system_audio）。
-    let recorder_bin = if cfg!(target_os = "ios") {
+    let recorder_bin = if cfg!(any(target_os = "ios", target_os = "android")) {
         data.join("tingo-recorder")
     } else {
         resources.join("tingo-recorder")
@@ -119,7 +127,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .manage(backend.clone())
         .manage(Arc::new(updater::NativeUpdater::default()));
-    #[cfg(not(target_os = "ios"))]
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
         .invoke_handler(tauri::generate_handler![

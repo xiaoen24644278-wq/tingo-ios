@@ -15,26 +15,32 @@ mod ios_backend;
 #[cfg(target_os = "ios")]
 pub use ios_backend::Recorder;
 
+#[cfg(target_os = "android")]
+#[path = "record_android.rs"]
+mod android_backend;
+#[cfg(target_os = "android")]
+pub use android_backend::Recorder;
+
 use std::path::Path;
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use std::path::PathBuf;
 
 use crate::asr::SR;
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use crate::audio::duck_mix_default;
 use crate::audio::read_wav16k;
 use crate::i18n::tr;
 
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use std::io::{BufRead, BufReader};
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use std::process::{Child, ChildStdout, Command, Stdio};
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use std::time::{Duration, Instant};
 
 // ============ macOS：tingo-recorder 子进程 ============
 
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub struct Recorder {
     child: Child,
     stdout: Option<BufReader<ChildStdout>>,
@@ -43,7 +49,7 @@ pub struct Recorder {
     pub started: Instant,
 }
 
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 impl Recorder {
     /// 启动录音组件，等它报告 READY（或出错）。
     pub fn start(bin: &Path, dir: &Path, system: bool, mic: bool) -> Result<Self, String> {
@@ -139,7 +145,7 @@ impl Recorder {
     }
 }
 
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 impl Drop for Recorder {
     fn drop(&mut self) {
         self.stop();
@@ -150,7 +156,7 @@ impl Drop for Recorder {
 
 /// 已经排好版的 HTML → A4 PDF。
 /// macOS 交给录音组件用系统 WebKit 排版；iOS 用进程内的 UIPrintPageRenderer。
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn html_to_pdf(bin: &Path, html: &str, out: &Path) -> Result<(), String> {
     let tmp = std::env::temp_dir().join(format!("tingo-pdf-{}-{}.html", std::process::id(), rand_suffix()));
     std::fs::write(&tmp, html).map_err(|e| e.to_string())?;
@@ -181,11 +187,64 @@ pub fn html_to_pdf(_bin: &Path, html: &str, out: &Path) -> Result<(), String> {
     res
 }
 
+// ============ Android 版实现（调 Kotlin） ============
+
+#[cfg(target_os = "android")]
+pub fn html_to_pdf(_bin: &Path, html: &str, out: &Path) -> Result<(), String> {
+    let tmp = std::env::temp_dir().join(format!("tingo-pdf-{}-{}.html", std::process::id(), rand_suffix()));
+    std::fs::write(&tmp, html).map_err(|e| e.to_string())?;
+    let res = crate::android::html_to_pdf(&tmp, out).map_err(|e| {
+        tr(&format!("导出 PDF 失败：{e}"), &format!("PDF export failed: {e}")).to_string()
+    });
+    let _ = std::fs::remove_file(&tmp);
+    res
+}
+
+#[cfg(target_os = "android")]
+pub fn html_to_docx(_html: &str, _out: &Path) -> Result<(), String> {
+    Err(tr(
+        "Android 版暂不支持导出 Word，可以导出 PDF 或复制 Markdown",
+        "Word export isn't available on Android yet — export PDF or copy Markdown",
+    )
+    .into())
+}
+
+#[cfg(target_os = "android")]
+pub fn decode(_bin: &Path, input: &Path) -> Result<Vec<f32>, String> {
+    if input.extension().is_some_and(|e| e.eq_ignore_ascii_case("wav")) {
+        if let Some(x) = read_wav16k(input) {
+            return Ok(x);
+        }
+    }
+    let tmp = std::env::temp_dir().join(format!("tingo-decode-{}-{}.wav", std::process::id(), rand_suffix()));
+    let result = match crate::android::decode(input, &tmp) {
+        Ok(()) => read_wav16k(&tmp).ok_or_else(|| tr("解码结果读不出来", "Couldn't read the decoded audio").to_string()),
+        Err(e) => Err(tr(&format!("解码失败：{e}"), &format!("Decoding failed: {e}")).to_string()),
+    };
+    let _ = std::fs::remove_file(&tmp);
+    result
+}
+
+#[cfg(target_os = "android")]
+pub fn mixdown(dir: &Path, dest: &Path) -> Result<(), String> {
+    let (sys, mic) = (dir.join("system.wav"), dir.join("mic.wav"));
+    let source = if mic.is_file() { mic.clone() } else if sys.is_file() { sys.clone() } else {
+        return Err(tr("没有录到任何声音", "Nothing was recorded").into());
+    };
+    crate::android::encode_aac(&source, dest).map_err(|e| {
+        tr(&format!("压缩录音失败：{e}"), &format!("Compressing the recording failed: {e}")).to_string()
+    })?;
+    for p in [&sys, &mic] {
+        let _ = std::fs::remove_file(p);
+    }
+    Ok(())
+}
+
 // ============ 删除 → 废纸篓 ============
 
 /// 移到废纸篓（不是彻底删除）。macOS 上交给录音组件的 `trash <路径>`（FileManager.trashItem，
 /// 成功打印 OK，失败打印 ERROR: …）；其它系统有 gio 就用 `gio trash`，否则报不支持。
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn trash(bin: &Path, path: &Path) -> Result<(), String> {
     let failed = |e: &str| tr(&format!("没能移到废纸篓：{e}"), &format!("Couldn't move to the Trash: {e}")).to_string();
     if cfg!(target_os = "macos") || bin.is_file() {
@@ -228,18 +287,18 @@ pub fn trash(_bin: &Path, path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 fn find_in_path(name: &str) -> Option<PathBuf> {
     std::env::split_paths(&std::env::var_os("PATH")?).map(|d| d.join(name)).find(|p| p.is_file())
 }
 
 // ============ HTML → Word ============
 
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub const TEXTUTIL: &str = "/usr/bin/textutil";
 
 /// HTML → Word：macOS 自带的 textutil。没有 textutil（非 macOS）时报错。
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn html_to_docx(html: &str, out: &Path) -> Result<(), String> {
     if !Path::new(TEXTUTIL).is_file() {
         return Err(tr("导出 Word 只支持 macOS", "Word export is only available on macOS").into());
@@ -280,8 +339,8 @@ pub fn html_to_docx(_html: &str, _out: &Path) -> Result<(), String> {
 pub fn probe(bin: &Path, system: bool, mic: bool, secs: u64) -> Result<Vec<(String, Option<f32>)>, String> {
     let dir = std::env::temp_dir().join(format!("tingo-rectest-{}-{}", std::process::id(), rand_suffix()));
     let result = (|| {
-        #[cfg(target_os = "ios")]
-        let (system, mic) = (false, mic || !system); // iOS 只录麦克风
+        #[cfg(any(target_os = "ios", target_os = "android"))]
+        let (system, mic) = (false, mic || !system); // 手机上只录麦克风
         let mut rec = Recorder::start(bin, &dir, system, mic)?;
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(secs);
         while std::time::Instant::now() < deadline {
@@ -309,7 +368,7 @@ pub fn is_permission_error(msg: &str) -> bool {
 
 // ============ 解码 ============
 
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn decode(bin: &Path, input: &Path) -> Result<Vec<f32>, String> {
     if input
         .extension()
@@ -403,7 +462,7 @@ pub fn write_wav16(path: &Path, samples: &[f32]) -> std::io::Result<()> {
 // ============ 录完后：混音 + 压成 m4a ============
 
 /// macOS：系统声音和麦克风按"让路"规则合成一条，压成 m4a（afconvert，AAC 48 kbps），删掉原始音轨。
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn mixdown(dir: &Path, dest: &Path) -> Result<(), String> {
     let (sys, mic) = (dir.join("system.wav"), dir.join("mic.wav"));
     let read = |p: &Path| if p.is_file() { read_wav16k(p) } else { None };

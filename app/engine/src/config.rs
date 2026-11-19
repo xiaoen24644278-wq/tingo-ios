@@ -185,12 +185,21 @@ pub fn default_path() -> PathBuf {
 
 /// iOS 沙盒里 HOME 就是 App 容器根：配置文件放 Library/Application Support，
 /// 既不暴露在「文件」App 里，也不会跟着 Documents 一起被 iCloud 备份。
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "android"))]
 fn default_path_in(home: &Path) -> PathBuf {
-    home.join("Library/Application Support/tingo/config.toml")
+    // iOS 沙盒的 Application Support；Android 上 HOME 由 src-tauri 设成 App 私有目录，
+    // 统一放在 files/config 下（见 src-tauri/src/lib.rs）
+    #[cfg(target_os = "ios")]
+    {
+        home.join("Library/Application Support/tingo/config.toml")
+    }
+    #[cfg(target_os = "android")]
+    {
+        home.join("config/tingo.toml")
+    }
 }
 
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 fn default_path_in(home: &Path) -> PathBuf {
     with_legacy(home.join(".config/tingo/config.toml"), home.join(".config/jiyao/config.toml"))
 }
