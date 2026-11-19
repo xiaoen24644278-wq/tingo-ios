@@ -236,7 +236,7 @@ object TingoAudio {
 
             while (!outputDone) {
                 if (!inputDone) {
-                    val inIdx = decoder.dequeueInputBuffer(10_000)
+                    val inIdx = decoder.dequeueInputBuffer(10_000L)
                     if (inIdx >= 0) {
                         val inBuf = decoder.getInputBuffer(inIdx)!!
                         val size = extractor.readSampleData(inBuf, 0)
@@ -249,7 +249,7 @@ object TingoAudio {
                         }
                     }
                 }
-                val outIdx = decoder.dequeueOutputBuffer(info, 10_000)
+                val outIdx = decoder.dequeueOutputBuffer(info, 10_000L)
                 if (outIdx >= 0) {
                     val outBuf = decoder.getOutputBuffer(outIdx)!!
                     if (info.size > 0) {
@@ -358,7 +358,7 @@ object TingoAudio {
 
             while (!eos) {
                 if (encoder != null) {
-                    val inIdx = encoder.dequeueInputBuffer(10_000)
+                    val inIdx = encoder.dequeueInputBuffer(10_000L)
                     if (inIdx >= 0) {
                         val inBuf = encoder.getInputBuffer(inIdx)!!
                         inBuf.clear()
@@ -371,7 +371,7 @@ object TingoAudio {
                             pts += (n / 2) * 1_000_000L / SR
                         }
                     }
-                    val outIdx = encoder.dequeueOutputBuffer(info, 10_000)
+                    val outIdx = encoder.dequeueOutputBuffer(info, 10_000L)
                     if (outIdx >= 0) {
                         val outBuf = encoder.getOutputBuffer(outIdx)!!
                         if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
@@ -410,84 +410,72 @@ object TingoAudio {
         }
     }
 
-    // ---------- 排好版的 HTML → A4 PDF（WebView 打印） ----------
+    // ---------- 排好版的 HTML → A4 PDF ----------
+    // 不用 PrintDocumentAdapter：它的 LayoutResultCallback / WriteResultCallback 构造函数是
+    // package-private（android.print 包内才能 new），第三方 App 无法匿名继承。
+    // 这里把 WebView 按 A4 宽度布局、撑到整页高度，再用 PdfDocument 逐页 translate + draw。
     @JvmStatic fun htmlToPdf(htmlPath: String, outPdf: String): Int {
         val ctx = appContext
         if (ctx == null) { setErr("拿不到 App 上下文，无法导出 PDF"); return -1 }
         val latch = CountDownLatch(1)
-        var result = 0
-        val finish = { code: Int ->
-            result = code
-            latch.countDown()
-        }
+        val result = intArrayOf(-1)
         Handler(Looper.getMainLooper()).post {
             try {
+                val pageW = 595   // A4 @72dpi
+                val pageH = 842
                 val web = WebView(ctx)
                 web.settings.javaScriptEnabled = false
                 web.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         try {
+                            val w = view ?: throw IllegalStateException("WebView 为空")
+                            // 按 A4 宽度重新布局，高度取内容高度
+                            val widthSpec = android.view.View.MeasureSpec.makeMeasureSpec(pageW, android.view.View.MeasureSpec.EXACTLY)
+                            val heightSpec = android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
+                            w.measure(widthSpec, heightSpec)
+                            val contentH = w.measuredHeight.coerceAtLeast(pageH)
+                            w.layout(0, 0, pageW, contentH)
+
+                            val doc = android.graphics.pdf.PdfDocument()
+                            var top = 0
+                            var pageNo = 1
+                            while (top < contentH) {
+                                val info = android.graphics.pdf.PdfDocument.PageInfo
+                                    .Builder(pageW, pageH, pageNo).create()
+                                val page = doc.startPage(info)
+                                val canvas = page.canvas
+                                canvas.save()
+                                canvas.translate(0f, -top.toFloat())
+                                w.draw(canvas)
+                                canvas.restore()
+                                doc.finishPage(page)
+                                top += pageH
+                                pageNo++
+                                if (pageNo > 200) break     // 保险丝
+                            }
                             val out = File(outPdf)
                             out.parentFile?.mkdirs()
-                            if (out.exists()) out.delete()
-                            val attrs = PrintAttributes.Builder()
-                                .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
-                                .setMinMargins(PrintAttributes.Margins(0, 0, 0, 0))
-                                .build()
-                            val adapter = view!!.createPrintDocumentAdapter("tingo")
-                            adapter.onLayout(
-                                null, attrs, null,
-                                object : PrintDocumentAdapter.LayoutResultCallback() {
-                                    override fun onLayoutFinished(info: PrintDocumentInfo?, changed: Boolean) {
-                                        try {
-                                            val pfd = ParcelFileDescriptor.open(
-                                                out,
-                                                ParcelFileDescriptor.MODE_CREATE or
-                                                    ParcelFileDescriptor.MODE_READ_WRITE or
-                                                    ParcelFileDescriptor.MODE_TRUNCATE
-                                            )
-                                            adapter.onWrite(
-                                                arrayOf(PageRange.ALL_PAGES), pfd, null,
-                                                object : PrintDocumentAdapter.WriteResultCallback() {
-                                                    override fun onWriteFinished(pages: Array<PageRange>?) {
-                                                        try { pfd.close() } catch (_: Throwable) {}
-                                                        if (!out.exists() || out.length() == 0L) {
-                                                            setErr("导出 PDF 失败：文件为空")
-                                                            finish(-1)
-                                                        } else finish(0)
-                                                    }
-                                                    override fun onWriteFailed(error: CharSequence?) {
-                                                        setErr("导出 PDF 失败：$error")
-                                                        finish(-1)
-                                                    }
-                                                }
-                                            )
-                                        } catch (t: Throwable) {
-                                            setErr("导出 PDF 失败：${t.message}")
-                                            finish(-1)
-                                        }
-                                    }
-                                    override fun onLayoutFailed(error: CharSequence?) {
-                                        setErr("排版失败：$error")
-                                        finish(-1)
-                                    }
-                                },
-                                null
-                            )
+                            out.outputStream().use { doc.writeTo(it) }
+                            doc.close()
+                            if (out.length() == 0L) {
+                                setErr("导出 PDF 失败：文件为空")
+                            } else {
+                                result[0] = 0
+                            }
                         } catch (t: Throwable) {
                             setErr("导出 PDF 失败：${t.message}")
-                            finish(-1)
+                        } finally {
+                            latch.countDown()
                         }
                     }
                 }
                 web.loadUrl("file://$htmlPath")
             } catch (t: Throwable) {
                 setErr("导出 PDF 失败：${t.message}")
-                finish(-1)
+                latch.countDown()
             }
         }
-        val ok = latch.await(90, TimeUnit.SECONDS)
-        if (!ok) { setErr("导出 PDF 超时"); return -1 }
-        return result
+        if (!latch.await(90, TimeUnit.SECONDS)) { setErr("导出 PDF 超时"); return -1 }
+        return result[0]
     }
 }
