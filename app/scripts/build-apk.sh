@@ -80,19 +80,24 @@ log "已拷贝：${JAVA_DIR}/TingoAudio.kt"
 ICON_1024="${TAURI_DIR}/icons/icon-1024.png"
 RES_DIR="${GEN_ANDROID}/app/src/main/res"
 scale_png() {  # $1=源 $2=目标 $3=像素
-  if command -v ffmpeg >/dev/null 2>&1; then
-    ffmpeg -loglevel error -y -i "$1" -vf "scale=$3:$3:flags=lanczos" "$2"
-  elif command -v convert >/dev/null 2>&1; then
-    convert "$1" -resize "$3x$3" "$2"
-  else
-    return 1
+  # 用独立的 Python 脚本（Pillow）缩放：CI 上 ffmpeg / ImageMagick 都不稳定
+  if python3 "${TAURI_DIR}/scripts-scale.py" "$1" "$2" "$3" 2>/dev/null; then
+    return 0
   fi
+  if command -v ffmpeg >/dev/null 2>&1; then
+    ffmpeg -loglevel error -y -i "$1" -vf "scale=$3:$3:flags=lanczos" -pix_fmt rgba "$2" && return 0
+  fi
+  if command -v magick >/dev/null 2>&1; then
+    magick "$1" -resize "${3}x${3}" "$2" && return 0
+  fi
+  echo "  缩放失败：需要 Pillow（pip install pillow）或 ffmpeg/ImageMagick" >&2
+  return 1
 }
 if [[ -f "${ICON_1024}" && -d "${RES_DIR}" ]]; then
   for pair in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
     d="${pair%%:*}"; px="${pair##*:}"
     dir="${RES_DIR}/mipmap-${d}"
-    [[ -d "${dir}" ]] || continue
+    mkdir -p "${dir}"   # Tauri 模板可能只有 anydpi-v26，这里补出各密度目录
     # 不判断文件是否存在：Tauri 模板可能只给 anydpi-v26 的自适应图标 XML，
     # 没有 mipmap-*/ic_launcher.png，这里必须无条件生成，否则删掉 XML 后图标就没了。
     for name in ic_launcher ic_launcher_round; do

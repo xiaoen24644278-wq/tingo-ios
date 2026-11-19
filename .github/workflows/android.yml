@@ -68,6 +68,9 @@ jobs:
             echo "没有可用 NDK" >&2; exit 1
           fi
 
+      - name: 安装 Pillow（生成各密度启动图标）
+        run: python3 -m pip install --quiet --break-system-packages pillow || python3 -m pip install --quiet pillow
+
       - name: 安装 pnpm
         run: |
           corepack enable
