@@ -75,22 +75,36 @@ cp -f "${KT_SRC}" "${JAVA_DIR}/TingoAudio.kt"
 log "已拷贝：${JAVA_DIR}/TingoAudio.kt"
 
 # ------------------------------------------------- Android 启动图标覆盖
-# 和 iOS 一样：tauri android init 生成的 mipmap 用的是 Tauri 默认图标，
-# 这里用我们的 1024 图按各 density 覆盖 ic_launcher / ic_launcher_round。
+# tauri android init 生成的 mipmap 用的是 Tauri 默认图标（黄青色 logo），必须自己换。
+# 注意：Android 在 Linux 上构建，没有 macOS 的 sips，用 ffmpeg / ImageMagick 缩放。
 ICON_1024="${TAURI_DIR}/icons/icon-1024.png"
 RES_DIR="${GEN_ANDROID}/app/src/main/res"
+scale_png() {  # $1=源 $2=目标 $3=像素
+  if command -v ffmpeg >/dev/null 2>&1; then
+    ffmpeg -loglevel error -y -i "$1" -vf "scale=$3:$3:flags=lanczos" "$2"
+  elif command -v convert >/dev/null 2>&1; then
+    convert "$1" -resize "$3x$3" "$2"
+  else
+    return 1
+  fi
+}
 if [[ -f "${ICON_1024}" && -d "${RES_DIR}" ]]; then
-  declare -A MIP=([mdpi]=48 [hdpi]=72 [xhdpi]=96 [xxhdpi]=144 [xxxhdpi]=192)
-  for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
-    px="${MIP[$d]}"
+  for pair in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+    d="${pair%%:*}"; px="${pair##*:}"
     dir="${RES_DIR}/mipmap-${d}"
     [[ -d "${dir}" ]] || continue
-    for name in ic_launcher ic_launcher_round ic_launcher_foreground; do
+    for name in ic_launcher ic_launcher_round; do
       [[ -f "${dir}/${name}.png" ]] || continue
-      sips -z "${px}" "${px}" "${ICON_1024}" --out "${dir}/${name}.png" >/dev/null 2>&1 \
+      scale_png "${ICON_1024}" "${dir}/${name}.png" "${px}" \
         || warn "生成 Android 图标失败：${dir}/${name}.png"
     done
   done
+  # 自适应图标（anydpi-v26 的 XML 会用前景/背景层，忽略上面的 PNG）——删掉，让系统回退到 PNG
+  if [[ -d "${RES_DIR}/mipmap-anydpi-v26" ]]; then
+    rm -f "${RES_DIR}/mipmap-anydpi-v26/ic_launcher.xml" \
+          "${RES_DIR}/mipmap-anydpi-v26/ic_launcher_round.xml"
+    log "已移除自适应图标 XML（改用 PNG 图标）"
+  fi
   log "Android 启动图标已覆盖"
 else
   warn "跳过 Android 图标覆盖（缺少 icon-1024.png 或 res 目录）"
@@ -154,6 +168,31 @@ done < <(find "${GEN_ANDROID}" -name "*.apk" -type f 2>/dev/null)
 
 if [[ "$found" == "0" ]]; then
   die "没找到 APK：检查 ${GEN_ANDROID}/app/build/outputs/apk"
+fi
+
+# ---------- 签名：release 包默认是 unsigned，直接装会被系统拒绝 ----------
+KEYSTORE="${OUT_DIR}/huit-release.jks"
+KS_PASS="huit2026pass"
+if [[ ! -f "${KEYSTORE}" ]]; then
+  keytool -genkeypair -keystore "${KEYSTORE}" -alias huit -keyalg RSA -keysize 2048 \
+    -validity 10000 -storepass "${KS_PASS}" -keypass "${KS_PASS}" \
+    -dname "CN=HuiT, O=HuiT, C=CN" >/dev/null 2>&1 \
+    || warn "生成签名密钥失败（keytool 不可用？）"
+fi
+APKSIGNER="$(ls "${SDK}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"
+if [[ -f "${KEYSTORE}" && -n "${APKSIGNER}" ]]; then
+  for apk in "${OUT_DIR}"/*unsigned*.apk; do
+    [[ -f "${apk}" ]] || continue
+    signed="${OUT_DIR}/HuiT-android.apk"
+    if "${APKSIGNER}" sign --ks "${KEYSTORE}" --ks-pass "pass:${KS_PASS}" \
+        --key-pass "pass:${KS_PASS}" --out "${signed}" "${apk}" 2>/dev/null; then
+      log "已签名：${signed}"
+    else
+      warn "签名失败：${apk}（产物仍是 unsigned，需要手动签名）"
+    fi
+  done
+else
+  warn "跳过签名（keytool 或 apksigner 不可用）"
 fi
 
 ls -lh "${OUT_DIR}"/*.apk
