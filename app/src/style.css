@@ -1064,7 +1064,7 @@ html.is-ios .app { padding-bottom: calc(env(safe-area-inset-bottom) + 4px); } /*
     left: calc(100vw - 56px);
     /* 侧栏自身已经按安全区做了 padding，按钮再吃一次 safe-area 就会掉到搜索框那一行，
        这里减掉一段让它和页面标题（h1）居中平齐 */
-    top: max(18px, calc(env(safe-area-inset-top) - 32px));
+    top: max(8px, calc(env(safe-area-inset-top) - 52px));
     opacity: 1; pointer-events: auto;
     transform: translateX(var(--side-w));
     background: var(--card); border: 1px solid var(--line);
@@ -1189,3 +1189,15 @@ html.is-ios .app { padding-bottom: calc(env(safe-area-inset-bottom) + 4px); } /*
   .splash-logo { animation: none; }
   .splash { transition-duration: 1ms; }
 }
+
+/* 麦克风未授权的提示条（手机） */
+.mic-banner {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 12px 14px; margin-bottom: 12px;
+  border-radius: 14px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text);
+  font-size: 13.5px; line-height: 1.45; text-align: left; cursor: pointer;
+}
+.mic-banner svg { width: 18px; height: 18px; flex: none; color: var(--blue); }
+.mic-banner.denied { border-color: rgba(226, 86, 86, 0.4); background: rgba(226, 86, 86, 0.06); }
+.mic-banner.denied svg { color: #e25656; }

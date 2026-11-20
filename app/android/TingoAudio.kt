@@ -89,6 +89,13 @@ object TingoAudio {
     private var micFile: RandomAccessFile? = null
     @Volatile private var micBytes = 0L
 
+    /** 0=已允许，1=被拒绝，2=还没问过 */
+    @JvmStatic fun micStatus(): Int {
+        val ctx = appContext ?: return 2
+        return if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED) 0 else 1
+    }
+
     @JvmStatic fun setup(): Int {
         if (!hasMicPermission()) {
             setErr("需要麦克风权限：请在系统设置 → 应用 → 会听 → 权限里打开「麦克风」")

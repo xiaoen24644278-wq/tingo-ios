@@ -17,6 +17,8 @@ export interface Env {
   version: string;
   /** 运行平台：ios | android | macos | linux */
   platform?: Platform;
+  /** 麦克风授权状态（手机上才有意义） */
+  mic_status?: "granted" | "denied" | "undetermined";
   root: string;
   ffmpeg: boolean;
   system_audio: boolean;

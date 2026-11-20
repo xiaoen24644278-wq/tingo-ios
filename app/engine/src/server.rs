@@ -567,6 +567,8 @@ async fn env(State(s): State<Shared>) -> Json<Value> {
         "root": s.root(),
         "ffmpeg": true, // 桌面版不需要 ffmpeg
         "system_audio": system_audio_supported(&s.opt.recorder_bin),
+        // 麦克风授权状态（手机上才有意义；桌面恒为 granted）
+        "mic_status": record::mic_status(),
         "model_cached": s.model_paths().base_ready() && s.model_paths().asr_ready(s.model_paths().active()),
         "asr_model": models::catalog().iter().find(|m| m.kind == s.model_paths().active()).map(|m| m.name),
         "models_downloadable": true, // 桌面版：模型在界面里下载（Python 版首次转写时自动下载，没有这个字段）
@@ -622,6 +624,22 @@ fn config_json(s: &AppState) -> Value {
         "auto_stop_app_quit": c.auto_stop_app_quit,
         "path": s.opt.config_path,
     })
+}
+
+/// 麦克风授权状态
+async fn mic_status_endpoint() -> Json<Value> {
+    Json(json!({ "status": record::mic_status() }))
+}
+
+/// 主动请求麦克风权限（手机上会弹系统授权框）
+async fn mic_request_endpoint() -> Json<Value> {
+    let res = tokio::task::spawn_blocking(record::request_mic).await;
+    let (status, error) = match res {
+        Ok(Ok(())) => (record::mic_status(), String::new()),
+        Ok(Err(e)) => (record::mic_status(), e),
+        Err(e) => (record::mic_status(), e.to_string()),
+    };
+    Json(json!({ "status": status, "error": error }))
 }
 
 async fn get_config(State(s): State<Shared>) -> Json<Value> {
@@ -2132,6 +2150,7 @@ pub fn router(state: Shared) -> Router {
     Router::new()
         .route("/api/env", get(env))
         .route("/api/config", get(get_config).put(put_config))
+        .route("/api/mic", get(mic_status_endpoint).post(mic_request_endpoint))
         .route("/api/config/test", post(test_llm))
         .route("/api/llm/providers", get(llm_providers))
         .route("/api/llm/models", post(llm_models))

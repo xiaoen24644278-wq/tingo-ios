@@ -349,6 +349,23 @@ pub fn html_to_docx(_html: &str, _out: &Path) -> Result<(), String> {
     .into())
 }
 
+/// 麦克风授权状态："granted" / "denied" / "undetermined"
+/// 桌面版不涉及运行时授权，恒为 granted。
+#[cfg(target_os = "ios")]
+pub fn mic_status() -> &'static str { crate::ios::mic_status() }
+#[cfg(target_os = "android")]
+pub fn mic_status() -> &'static str { crate::android::mic_status() }
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub fn mic_status() -> &'static str { "granted" }
+
+/// 主动请求麦克风权限（会弹系统授权框）。桌面版直接成功。
+#[cfg(target_os = "ios")]
+pub fn request_mic() -> Result<(), String> { crate::ios::request_mic() }
+#[cfg(target_os = "android")]
+pub fn request_mic() -> Result<(), String> { crate::android::setup() }
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub fn request_mic() -> Result<(), String> { Ok(()) }
+
 // ============ 试录与错误分类（两个平台共用） ============
 
 /// 试录 `secs` 秒（录进临时目录，录完就删），返回每条音轨（system / mic）最响那段的音量（0～1）；

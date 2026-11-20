@@ -5,6 +5,7 @@ import { t } from "../i18n";
 import { api, isMobile, type Job } from "../api";
 import { $, $maybe, errorMessage, esc, ICON, main, toast } from "../dom";
 import { poll } from "../poll";
+import { refreshEnv } from "../sidebar";
 import { isBusy, needsModels, S } from "../state";
 import { dismissJob, renderTasks } from "../tasks";
 import { isRecordingPage, leaveRecording, renderRecording, updateRecording } from "./recording";
@@ -85,10 +86,40 @@ function downloadPanel(): string {
     </div>`;
 }
 
+/** 麦克风被拒绝 / 还没授权时的提示条：手机上点录音没反应，多半是这一步没过 */
+function micBanner(): string {
+  const st = S.env?.mic_status;
+  if (!st || st === "granted" || isMobile() === false) return "";
+  const denied = st === "denied";
+  return `<button class="mic-banner${denied ? " denied" : ""}" id="micFix" type="button">
+    ${ICON.mic}
+    <span>${
+      denied
+        ? t("麦克风被拒绝了：「设置 → 会听HuiT → 麦克风」打开后回到这里", "Microphone denied — turn it on in Settings → HuiT → Microphone")
+        : t("点这里允许麦克风，才能录下会议", "Tap to allow the microphone so meetings can be recorded")
+    }</span>
+  </button>`;
+}
+
+// 点提示条 → 主动请求权限（会弹系统授权框）
+document.addEventListener("click", async (ev) => {
+  const target = ev.target as HTMLElement | null;
+  if (!target?.closest("#micFix")) return;
+  ev.preventDefault();
+  try {
+    const r = await api<{ status: string; error?: string }>("/api/mic", { method: "POST" });
+    if (r.error) toast(r.error, true);
+  } catch (e) {
+    toast(errorMessage(e), true);
+  }
+  await refreshEnv();
+});
+
 function idleForm(): string {
   if (needsModels()) return downloadPanel();
   const sys = S.env ? S.env.system_audio : true;
   return `
+    ${micBanner()}
     <input class="title-input" id="fTitle" placeholder="${t("会议名称，比如：周会、项目评审", "Meeting name, e.g. Weekly sync, Design review")}" value="${esc(S.form.title)}" maxlength="60">
     <input class="hot-input" id="fHot" placeholder="${t("热词（可选）：人名、项目代号、专有名词，用逗号隔开", "Hotwords (optional): names, project codes, jargon — comma separated")}" value="${esc(S.form.hotwords)}">
     <div class="glass-foot">

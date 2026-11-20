@@ -81,6 +81,24 @@ public func tingo_ios_setup_session() -> Int32 {
 
 /// 麦克风权限（iOS 17 起用 AVAudioApplication，之前用 AVAudioSession.recordPermission）。
 /// 同步等待用户点完授权框，最多 20 秒。
+/// 麦克风授权状态：0=已允许，1=被拒绝，2=还没问过
+@_cdecl("tingo_ios_mic_status")
+public func tingo_ios_mic_status() -> Int32 {
+    if #available(iOS 17.0, *) {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted: return 0
+        case .denied: return 1
+        default: return 2
+        }
+    } else {
+        switch AVAudioSession.sharedInstance().recordPermission {
+        case .granted: return 0
+        case .denied: return 1
+        default: return 2
+        }
+    }
+}
+
 @_cdecl("tingo_ios_request_mic")
 public func tingo_ios_request_mic() -> Int32 {
     final class Box: @unchecked Sendable { var value = false }

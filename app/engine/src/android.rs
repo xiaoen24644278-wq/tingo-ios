@@ -109,6 +109,26 @@ fn call_double(method: &str) -> f64 {
     }
 }
 
+/// 麦克风授权状态："granted" / "denied" / "undetermined"
+pub fn mic_status() -> &'static str {
+    match call_int_status("micStatus") {
+        0 => "granted",
+        1 => "denied",
+        _ => "undetermined",
+    }
+}
+
+/// 调一个返回 Int 的 Kotlin 静态方法，拿原始返回值
+fn call_int_status(method: &str) -> i32 {
+    let Ok(vm) = vm() else { return -1 };
+    let Ok(mut env) = vm.attach_current_thread() else { return -1 };
+    let Ok(cls) = env.find_class(CLASS) else { return -1 };
+    match env.call_static_method(cls, method, "()I", &[]) {
+        Ok(v) => v.i().unwrap_or(-1),
+        Err(_) => -1,
+    }
+}
+
 pub fn setup() -> Result<(), String> {
     let vm = vm()?;
     let mut env = vm

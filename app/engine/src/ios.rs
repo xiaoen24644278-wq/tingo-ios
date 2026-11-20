@@ -15,6 +15,10 @@ extern "C" {
     fn tingo_ios_setup_session() -> c_int;
     /// 在 dir 下新建 mic.wav（16 kHz 单声道 16 bit）并开始录音，返回 0 表示成功。
     fn tingo_ios_rec_start(dir: *const c_char) -> c_int;
+    /// 麦克风授权状态：0=已允许，1=被拒绝，2=还没问过
+    fn tingo_ios_mic_status() -> c_int;
+    /// 主动请求麦克风权限（会弹系统框），0=允许
+    fn tingo_ios_request_mic() -> c_int;
     /// 停止录音并把 wav 文件头写完整。
     fn tingo_ios_rec_stop() -> c_int;
     /// 本次录音已经录了多少秒。
@@ -51,6 +55,23 @@ pub fn setup_session() -> Result<(), String> {
     match unsafe { tingo_ios_setup_session() } {
         0 => Ok(()),
         _ => Err(err()),
+    }
+}
+
+/// 主动请求权限（会弹系统授权框）
+pub fn request_mic() -> Result<(), String> {
+    match unsafe { tingo_ios_request_mic() } {
+        0 => Ok(()),
+        _ => Err(err()),
+    }
+}
+
+/// 麦克风授权状态："granted" / "denied" / "undetermined"
+pub fn mic_status() -> &'static str {
+    match unsafe { tingo_ios_mic_status() } {
+        0 => "granted",
+        1 => "denied",
+        _ => "undetermined",
     }
 }
 
