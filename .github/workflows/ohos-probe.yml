@@ -1,0 +1,71 @@
+name: OHOS 交叉编译探测
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: 探测 Rust 引擎能否编到 HarmonyOS
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust + OHOS target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-ohos
+
+      - name: 确认 target 可用
+        run: |
+          rustc --version
+          rustc --print target-list | grep ohos
+          rustup target list --installed
+          echo "--- sysroot 里有 std 吗"
+          ls "$(rustc --print sysroot)/lib/rustlib/aarch64-unknown-linux-ohos/lib" | head -5
+
+      - name: 最小 crate 验证工具链（不需要链接器）
+        run: |
+          mkdir -p /tmp/probe/src && cd /tmp/probe
+          cat > Cargo.toml <<'EOF'
+          [package]
+          name = "probe"
+          version = "0.1.0"
+          edition = "2021"
+
+          [lib]
+          crate-type = ["staticlib"]
+          EOF
+          cat > src/lib.rs <<'EOF'
+          use std::collections::BTreeMap;
+
+          /// 用一点标准库（BTreeMap / String / 格式化）确认 std 真的能链进来
+          pub fn summarize(items: &[&str]) -> String {
+              let mut m: BTreeMap<&str, usize> = BTreeMap::new();
+              for it in items { *m.entry(it).or_insert(0) += 1; }
+              m.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>().join(",")
+          }
+          EOF
+          cargo build --target aarch64-unknown-linux-ohos --release 2>&1 | tail -15
+          ls -lh target/aarch64-unknown-linux-ohos/release/
+          file target/aarch64-unknown-linux-ohos/release/libprobe.a || true
+
+      - name: 编译 tingo-engine 本体（预期会卡在 sherpa-onnx 的原生依赖）
+        continue-on-error: true
+        run: |
+          cd app/engine
+          echo "=== 先试不带 sherpa 的依赖能否编（排除网络问题）"
+          cargo build --target aarch64-unknown-linux-ohos --release 2>&1 | tail -60
+
+      - name: 编译错误摘要
+        if: always()
+        run: |
+          echo "如果上面 tingo-engine 构建失败，关键看这几类："
+          echo "  1) sherpa-onnx-sys 的 build.rs 需要 CMake + OHOS NDK（缺则报 cmake/toolchain 相关）"
+          echo "  2) onnxruntime 需要 OHOS 版静态库"
+          echo "  3) reqwest/rustls 的 ring 需要 OHOS 的 clang 交叉编译"
+          echo "  4) libc 在 OHOS 上的符号差异"
