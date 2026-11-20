@@ -1,4 +1,4 @@
-import { api, type MeetingSummary } from "../api";
+import { api, isMobile, type MeetingSummary } from "../api";
 import { isEn, speakerName, t } from "../i18n";
 import { $, $$, $maybe, color, errorMessage, esc, fmt, ICON, initial, main, toast } from "../dom";
 import { allTags, batch, type BatchAction, confirmBox, editTags, fmtBytes } from "../manage";
@@ -145,8 +145,14 @@ function drawMeetings(q: string): void {
       (!view.tag || (m.tags ?? []).includes(view.tag)) &&
       (!q || (m.title + m.summary + m.speakers.join("") + (m.tags ?? []).join("")).includes(q)),
   );
-  const root = S.env ? S.env.root.replace(/^\/Users\/[^/]+/, "~") : "~/Documents/tingo";
-  $("#mCount").textContent = S.meetings.length ? t(`共 ${S.meetings.length} 场，存放在 ${root}`, `${S.meetings.length} meetings, stored in ${root}`) : "";
+  // 手机上会议目录是 App 沙盒里的长路径（/private/var/mobile/Containers/...），对用户没意义也没法用，
+  // 只报数量；桌面版保留路径方便定位文件。
+  const root = S.env ? S.env.root.replace(/^\/Users\/[^/]+/, "~") : "~/Documents/Tingo";
+  $("#mCount").textContent = S.meetings.length
+    ? isMobile()
+      ? t(`共 ${S.meetings.length} 场`, `${S.meetings.length} meetings`)
+      : t(`共 ${S.meetings.length} 场，存放在 ${root}`, `${S.meetings.length} meetings, stored in ${root}`)
+    : "";
   if (!S.meetings.length) {
     box.innerHTML = `<div class="empty"><h3>${t("还没有会议", "No meetings yet")}</h3><div>${t("开一场会，或者把已有的录音拖进窗口", "Start a meeting, or drop an existing recording into the window")}</div><a class="btn primary" href="#/">${t("开始录音", "Start recording")}</a></div>`;
     return;
