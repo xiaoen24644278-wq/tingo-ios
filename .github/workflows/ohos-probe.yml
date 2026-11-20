@@ -54,6 +54,16 @@ jobs:
           ls -lh target/aarch64-unknown-linux-ohos/release/
           file target/aarch64-unknown-linux-ohos/release/libprobe.a || true
 
+      - name: 给钉住的工具链补 OHOS target
+        run: |
+          # app/engine/rust-toolchain.toml 钉了 1.95.0，action 装的是 stable，
+          # 不补的话 engine 编译会报 can't find crate for `core`
+          V="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' app/engine/rust-toolchain.toml | head -1)"
+          echo "钉住的工具链：$V"
+          rustup toolchain install "$V" --profile minimal --target aarch64-unknown-linux-ohos || true
+          rustup target add aarch64-unknown-linux-ohos --toolchain "$V" || true
+          rustup run "$V" rustc --print target-list | grep ohos || true
+
       - name: 编译 tingo-engine 本体（预期会卡在 sherpa-onnx 的原生依赖）
         continue-on-error: true
         run: |
