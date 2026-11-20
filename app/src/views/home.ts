@@ -188,11 +188,16 @@ function bindHome(phase: Phase): void {
     };
     const hot = $<HTMLInputElement>("#fHot");
     hot.oninput = () => (S.form.hotwords = hot.value);
-    $("#tSys").onclick = (e) => {
-      S.form.system = !S.form.system;
-      (e.currentTarget as HTMLElement).classList.toggle("on", S.form.system);
-      (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(S.form.system));
-    };
+    // 手机上「系统声音」开关不渲染（录不到别的 App 的音频），这里必须容忍它不存在，
+    // 否则 $() 会抛 "missing element #tSys"，整个启动流程就断在这
+    const sysToggle = $maybe<HTMLElement>("#tSys");
+    if (sysToggle) {
+      sysToggle.onclick = (e) => {
+        S.form.system = !S.form.system;
+        (e.currentTarget as HTMLElement).classList.toggle("on", S.form.system);
+        (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(S.form.system));
+      };
+    }
     $("#tMic").onclick = (e) => {
       S.form.mic = !S.form.mic;
       (e.currentTarget as HTMLElement).classList.toggle("on", S.form.mic);
