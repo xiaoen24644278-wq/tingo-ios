@@ -71,6 +71,16 @@ jobs:
           echo "=== 先试不带 sherpa 的依赖能否编（排除网络问题）"
           cargo build --target aarch64-unknown-linux-ohos --release 2>&1 | tail -60
 
+      - name: 强制链接成 .so（这一步才真正需要 sherpa-onnx 的 OHOS 原生库）
+        continue-on-error: true
+        run: |
+          cd app/engine
+          echo "=== cargo rustc --crate-type cdylib：会触发原生库链接"
+          cargo rustc --target aarch64-unknown-linux-ohos --release --crate-type cdylib 2>&1 | tail -40
+          echo "=== 产物"
+          ls -lh target/aarch64-unknown-linux-ohos/release/*.so 2>/dev/null || echo "没有生成 .so"
+          file target/aarch64-unknown-linux-ohos/release/*.so 2>/dev/null || true
+
       - name: 编译错误摘要
         if: always()
         run: |
