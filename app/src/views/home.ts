@@ -88,6 +88,7 @@ function downloadPanel(): string {
 
 /** 麦克风被拒绝 / 还没授权时的提示条：手机上点录音没反应，多半是这一步没过 */
 function micBanner(): string {
+  bindMicFix();
   const st = S.env?.mic_status;
   if (!st || st === "granted" || isMobile() === false) return "";
   const denied = st === "denied";
@@ -101,19 +102,24 @@ function micBanner(): string {
   </button>`;
 }
 
-// 点提示条 → 主动请求权限（会弹系统授权框）
-document.addEventListener("click", async (ev) => {
-  const target = ev.target as HTMLElement | null;
-  if (!target?.closest("#micFix")) return;
-  ev.preventDefault();
-  try {
-    const r = await api<{ status: string; error?: string }>("/api/mic", { method: "POST" });
-    if (r.error) toast(r.error, true);
-  } catch (e) {
-    toast(errorMessage(e), true);
-  }
-  await refreshEnv();
-});
+// 点提示条 → 主动请求权限（会弹系统授权框）。用幂等注册，避免模块被多次引入时绑多次。
+let micFixBound = false;
+function bindMicFix(): void {
+  if (micFixBound) return;
+  micFixBound = true;
+  document.addEventListener("click", async (ev) => {
+    const target = ev.target as HTMLElement | null;
+    if (!target?.closest("#micFix")) return;
+    ev.preventDefault();
+    try {
+      const r = await api<{ status: string; error?: string }>("/api/mic", { method: "POST" });
+      if (r.error) toast(r.error, true);
+    } catch (e) {
+      toast(errorMessage(e), true);
+    }
+    await refreshEnv();
+  });
+}
 
 function idleForm(): string {
   if (needsModels()) return downloadPanel();

@@ -3,7 +3,7 @@ import { api, type Config, initApi, type Job } from "./api";
 import { applyLang, renderShell, t } from "./i18n";
 import { checkUpdate } from "./update";
 import { shouldOnboard } from "./views/welcome";
-import { $, setupModal } from "./dom";
+import { $, esc, setupModal } from "./dom";
 import { poll } from "./poll";
 import { route } from "./router";
 import { refreshShell, setupShell } from "./shell";
@@ -27,6 +27,23 @@ function hideSplash(startedAt: number): void {
 
 async function boot(): Promise<void> {
   const startedAt = performance.now();
+  // 硬兜底：不管初始化成功还是抛错，8 秒内一定撤掉启动画面，绝不把用户卡在黑屏
+  const guard = window.setTimeout(() => hideSplash(startedAt), 8000);
+  try {
+    await bootInner(startedAt);
+  } catch (err) {
+    // 启动失败也要让用户看到原因（否则就是一片黑）
+    const main = document.getElementById("main");
+    if (main) {
+      main.innerHTML = `<div class="page"><div class="empty"><h3>${t("启动失败", "Failed to start")}</h3><div style="word-break:break-all;font-size:12.5px">${esc(String(err))}</div></div></div>`;
+    }
+  } finally {
+    window.clearTimeout(guard);
+    hideSplash(startedAt);
+  }
+}
+
+async function bootInner(startedAt: number): Promise<void> {
   setupShell();
   try {
     await initApi();
@@ -43,6 +60,8 @@ async function boot(): Promise<void> {
   }
   renderShell();
   refreshShell();
+  // 界面骨架出来后立刻撤掉启动画面：后面的数据加载慢或失败，也不会让人一直盯着黑屏
+  hideSplash(startedAt);
   setupModal();
   setupImport();
   setupPlayerKeys();
