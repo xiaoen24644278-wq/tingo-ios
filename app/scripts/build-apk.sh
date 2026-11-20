@@ -144,6 +144,16 @@ open(p, "w", encoding="utf-8").write(s)
 print("added:", added if added else "(all present)")
 PY
 
+# ------------------------------------------------- 启动时主动请求麦克风权限
+# Android 的运行时权限必须在 Activity 里请求（TingoAudio 是普通 object，拿不到 onRequestPermissionsResult）。
+# 这里给 MainActivity 补一段 onCreate：没授权就先申请，省得用户点录音才发现没权限。
+MAIN_KT="$(find "${GEN_ANDROID}/app/src/main/java" -name "MainActivity.kt" 2>/dev/null | head -1 || true)"
+if [[ -n "${MAIN_KT}" && -f "${MAIN_KT}" ]]; then
+  python3 "${TAURI_DIR}/scripts-micperm.py" "${MAIN_KT}"
+else
+  warn "没找到 MainActivity.kt，跳过麦克风权限申请代码注入"
+fi
+
 step "构建 APK"
 mkdir -p "${OUT_DIR}"
 ARGS=( android build --apk )
