@@ -56,16 +56,28 @@ private func cString(_ p: UnsafePointer<CChar>?) -> String? {
 
 /// .playAndRecord + 外放 + 与其它 App 混音：开会时 Tingo 录音不能把腾讯会议的声音掐掉。
 /// 后台继续录音靠 Info.plist 的 UIBackgroundModes=audio（构建脚本会注入）。
+/// 把音频会话的操作放到主线程：首次激活音频硬件时系统会把实际工作派回主队列，
+/// 在 Rust 的后台线程里直接调容易超时或拿不到有效的输入格式。
+private func onMain(_ work: () throws -> Void) rethrows {
+    if Thread.isMainThread {
+        try work()
+    } else {
+        try DispatchQueue.main.sync(execute: work)
+    }
+}
+
 private func configureSession() throws {
     let session = AVAudioSession.sharedInstance()
-    try session.setCategory(
-        .playAndRecord,
-        mode: .default,
-        options: [.mixWithOthers, .defaultToSpeaker, .allowBluetooth]
-    )
-    try session.setPreferredSampleRate(48_000)
-    try session.setPreferredIOBufferDuration(0.02)
-    try session.setActive(true)
+    try onMain {
+        try session.setCategory(
+            .playAndRecord,
+            mode: .default,
+            options: [.mixWithOthers, .defaultToSpeaker, .allowBluetooth]
+        )
+        try session.setPreferredSampleRate(48_000)
+        try session.setPreferredIOBufferDuration(0.02)
+        try session.setActive(true)
+    }
 }
 
 @_cdecl("tingo_ios_setup_session")
@@ -280,9 +292,11 @@ final class MicRecorder {
             self.pendingLock.unlock()
         }
 
-        engine.prepare()
         do {
-            try engine.start()
+            try onMain {
+                engine.prepare()
+                try engine.start()
+            }
         } catch {
             input.removeTap(onBus: 0)
             w.close()
@@ -317,6 +331,10 @@ final class MicRecorder {
         startedAt = Date()
         stoppedAt = nil
         running = true
+    }
+
+    private func onMainOrIgnore(_ work: () -> Void) {
+        if Thread.isMainThread { work() } else { DispatchQueue.main.sync(execute: work) }
     }
 
     /// 中断结束、系统允许恢复时重新起引擎（文件保持同一个，继续往后写）。
@@ -362,8 +380,12 @@ final class MicRecorder {
 
         if let obs { NotificationCenter.default.removeObserver(obs) }
         timer?.cancel()
-        e?.inputNode.removeTap(onBus: 0)
-        e?.stop()
+        if let e {
+            onMainOrIgnore {
+                e.inputNode.removeTap(onBus: 0)
+                e.stop()
+            }
+        }
 
         // 收尾：把内存里剩下的冲出去，再回填 wav 头
         pendingLock.lock()

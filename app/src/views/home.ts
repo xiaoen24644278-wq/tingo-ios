@@ -225,6 +225,29 @@ async function startRecording(): Promise<void> {
     const label = btn.previousElementSibling;
     if (label) label.textContent = t("正在启动…", "Starting…");
   }
+  // 录音请求最慢的一步是首次加载识别模型（几十秒）。这里每秒查一次 /api/diag，
+  // 把「正在加载模型 / 正在打开麦克风」写到按钮左边，避免用户以为点了没反应。
+  const startedAt = performance.now();
+  const labelEl = btn?.previousElementSibling as HTMLElement | null;
+  const setStage = (text: string) => {
+    if (labelEl) labelEl.textContent = text;
+  };
+  let diagTimer = 0;
+  if (labelEl) {
+    diagTimer = window.setInterval(async () => {
+      const secs = Math.round((performance.now() - startedAt) / 1000);
+      try {
+        const d = await api<{ engine_loaded: boolean }>("/api/diag");
+        setStage(
+          d.engine_loaded
+            ? t("正在打开麦克风…", "Opening the microphone…")
+            : t(`正在加载识别模型…${secs}s`, `Loading the speech model… ${secs}s`),
+        );
+      } catch {
+        setStage(t(`正在准备…${secs}s`, `Preparing… ${secs}s`));
+      }
+    }, 1000);
+  }
   try {
     S.job = await api<Job>("/api/record/start", {
       json: {
@@ -235,9 +258,12 @@ async function startRecording(): Promise<void> {
       },
     });
     S.form.title = "";
+    if (diagTimer) window.clearInterval(diagTimer);
     poll();
   } catch (e) {
     toast(errorMessage(e), true);
+    if (diagTimer) window.clearInterval(diagTimer);
+    setStage(t("开始录音", "Record"));
     if (btn) {
       btn.disabled = false;
       btn.removeAttribute("aria-busy");

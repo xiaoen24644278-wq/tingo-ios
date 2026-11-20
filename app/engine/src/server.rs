@@ -626,6 +626,23 @@ fn config_json(s: &AppState) -> Value {
     })
 }
 
+/// 录音自检：把「点了录音但没反应」这件事拆开——引擎有没有加载、模型在不在、录音器什么状态
+async fn diag(State(s): State<Shared>) -> Json<Value> {
+    let paths = s.model_paths();
+    let kind = paths.active();
+    let recording = s.recording.lock().unwrap().as_ref().map(|l| l.job.clone());
+    Json(json!({
+        "version": s.opt.version,
+        "engine_loaded": s.engine_loaded(),
+        "model_base_ready": paths.base_ready(),
+        "model_asr_ready": paths.asr_ready(kind),
+        "asr_model": models::catalog().iter().find(|m| m.kind == kind).map(|m| m.name),
+        "recording_job": recording,
+        "mic_status": record::mic_status(),
+        "root": s.root(),
+    }))
+}
+
 /// 麦克风授权状态
 async fn mic_status_endpoint() -> Json<Value> {
     Json(json!({ "status": record::mic_status() }))
@@ -2151,6 +2168,7 @@ pub fn router(state: Shared) -> Router {
         .route("/api/env", get(env))
         .route("/api/config", get(get_config).put(put_config))
         .route("/api/mic", get(mic_status_endpoint).post(mic_request_endpoint))
+        .route("/api/diag", get(diag))
         .route("/api/config/test", post(test_llm))
         .route("/api/llm/providers", get(llm_providers))
         .route("/api/llm/models", post(llm_models))
@@ -2217,6 +2235,15 @@ pub async fn serve_state(
     state: Arc<AppState>,
     port: u16,
 ) -> std::io::Result<(u16, impl std::future::Future<Output = ()>)> {
+    // 预热识别引擎：模型加载要几十秒，放到后台先做，用户点「开始录音」时通常已经好了。
+    // 延后 3 秒，避免和首屏渲染抢 CPU。
+    {
+        let warm = state.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            let _ = warm.engine(); // 失败也无所谓（模型没下载时会直接返回 Err）
+        });
+    }
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     let port = listener.local_addr()?.port();
     let app = router(state);
