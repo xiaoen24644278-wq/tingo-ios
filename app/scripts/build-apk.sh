@@ -140,6 +140,9 @@ for name, _ in wanted:
     if "</manifest>" in s:
         s = s.replace("</manifest>", line + "</manifest>", 1)
         added.append(short)
+if "usesCleartextTraffic" not in s and "<application" in s:
+    s = s.replace("<application", '<application android:usesCleartextTraffic="true"', 1)
+    added.append("usesCleartextTraffic")
 open(p, "w", encoding="utf-8").write(s)
 print("added:", added if added else "(all present)")
 PY

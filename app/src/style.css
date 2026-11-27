@@ -1073,8 +1073,8 @@ html.is-ios .app { padding-bottom: calc(env(safe-area-inset-bottom) + 4px); } /*
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     align-items: center;
-    height: calc(58px + max(0px, env(safe-area-inset-bottom)));
-    padding: 4px 12px max(6px, env(safe-area-inset-bottom));
+    height: calc(58px + max(12px, env(safe-area-inset-bottom)));
+    padding: 4px 12px max(12px, env(safe-area-inset-bottom));
     background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);

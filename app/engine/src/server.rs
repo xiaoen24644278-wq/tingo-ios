@@ -2172,16 +2172,8 @@ async fn download_update(State(s): State<Shared>) -> ApiResult<Json<Job>> {
 }
 
 pub fn router(state: Shared) -> Router {
-    let origins = [
-        "tauri://localhost",
-        "http://tauri.localhost",
-        "https://tauri.localhost",
-        "http://localhost:1420",
-    ];
     let cors = CorsLayer::new()
-        .allow_origin(AllowOrigin::list(
-            origins.iter().map(|o| HeaderValue::from_static(o)),
-        ))
+        .allow_origin(AllowOrigin::mirror_request())
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
         .allow_headers([
             axum::http::header::CONTENT_TYPE,
