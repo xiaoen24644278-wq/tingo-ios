@@ -2,6 +2,7 @@
    布局参考 DeepSeek Harness：侧边栏可收成图标栏，内容按自己的宽度自适应（窗口最窄 720px）。 */
 
 :root {
+  color-scheme: light dark;
   --bg: #fafafc;
   --card: #ffffff;
   --line: #e9e9ed;
@@ -572,6 +573,7 @@ a.tag-chip.sm:hover { color: var(--blue); }
 .rec-btn:hover:not(:disabled) { transform: scale(1.06); }
 .rec-btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
 .rec-btn .core { width: 14px; height: 14px; border-radius: 50%; background: #ff4d4f; transition: all 0.2s; }
+.rec-btn .rec-btn-text { display: none; }
 .rec-btn.stop .core { border-radius: 3px; background: #fff; }
 .rec-btn:disabled { cursor: wait; }
 .rec-label { font-size: 13px; color: var(--muted); }
@@ -1133,32 +1135,70 @@ html.is-ios .app { padding-bottom: calc(env(safe-area-inset-bottom) + 4px); } /*
   .grid, .steps, .set-layout, .fb-body, .s-row2, .wl-perm, .sp-row, .history-layout {
     grid-template-columns: minmax(0, 1fr);
   }
-  /* 首页快捷入口：手机端改为 2x2 精致网格卡片，一屏展示不冗长 */
+  /* 首页快捷入口（方案 A）：导入录音通栏居中 + 其余卡片 2 列 */
   .quick {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
-    margin-top: 16px;
+    margin-top: 14px;
   }
   .quick-item {
     grid-template-columns: 28px minmax(0, 1fr);
-    padding: 12px;
+    padding: 12px 13px;
     gap: 10px;
+    border-radius: 16px;
   }
-  .quick-item > svg:last-child { display: none; }
-  .quick-item b { font-size: 14px; }
+  .quick-item.quick-import {
+    grid-column: 1 / -1;
+    grid-template-columns: 36px minmax(0, 1fr) 14px;
+    border-style: dashed;
+    border-color: #9db4ff;
+    padding: 13px 14px;
+  }
+  .quick-item.quick-import .ico {
+    width: 36px; height: 36px; border-radius: 11px;
+    background: var(--blue-soft); color: var(--blue);
+  }
+  .quick-item.quick-import .ico svg { width: 20px; height: 20px; }
+  .quick-item:not(.quick-import) > svg:last-child { display: none; }
+  .quick-item b { font-size: 13.5px; }
   .quick-item small { font-size: 11.5px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 
-  /* 首页玻璃面板与录音按钮触控强化 */
-  .hero-head { padding: 4px 0 16px; }
+  /* 方案 A 手机端顶部品牌与状态胶囊 */
+  .m-top { display: flex; align-items: center; justify-content: space-between; margin: 2px 2px 14px; }
+  .m-brand { display: flex; align-items: center; gap: 8px; }
+  .m-logo svg { width: 26px; height: 26px; display: block; stroke: none; }
+  .m-brand b { font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
+  .m-brand small { font: 500 11px var(--num); color: var(--muted-2); }
+  .m-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 11px; border-radius: 99px; font-size: 11.5px; font-weight: 500;
+    min-height: 28px !important;
+  }
+  .m-pill i { width: 6px; height: 6px; border-radius: 50%; }
+  .m-pill.ok { background: rgba(18, 183, 106, 0.12); color: #067647; }
+  .m-pill.ok i { background: var(--green); }
+  .m-pill.warn { background: rgba(247, 144, 9, 0.14); color: #b54708; }
+  .m-pill.warn i { background: var(--amber); }
+
+  /* 方案 A 极光录音卡 + 通栏大按钮 */
+  .hero-head { padding: 4px 0 14px; }
   .hero-head h1 { font-size: 26px; margin: 12px 0 6px; }
   .hero-head p { font-size: 13.5px; }
-  .aurora { min-height: 0; padding: 14px 10px; border-radius: 22px; }
-  .glass { padding: 18px 16px 16px; border-radius: 18px; }
-  .glass-foot { gap: 8px; margin-top: 14px; }
-  .glass-foot .rec-label { display: inline-block !important; font-size: 13.5px; font-weight: 500; color: var(--text-2); }
-  .rec-btn { width: 52px; height: 52px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22); }
-  .rec-btn .core { width: 16px; height: 16px; }
-  .import-chip { color: var(--blue); border-color: #c9d6ff; background: #f5f8ff; font-weight: 500; }
+  .aurora { min-height: 0; padding: 10px; border-radius: 24px; }
+  .glass-ring { border-radius: 22px; }
+  .glass { padding: 16px 16px 15px; border-radius: 20px; }
+  .glass-kicker { font-size: 11.5px; font-weight: 500; color: var(--blue); margin-bottom: 4px; }
+  .glass .title-input { font-size: 17px; padding: 2px 4px 8px; }
+  .glass-foot { gap: 10px; margin-top: 12px; }
+  .glass-foot .rec-label { display: none !important; }
+  .glass-foot .spacer { display: none; }
+  .rec-btn {
+    width: 100%; height: 48px; border-radius: 16px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 15px; font-weight: 500; box-shadow: 0 8px 20px -6px rgba(15, 23, 42, 0.35);
+  }
+  .rec-btn .core { width: 10px; height: 10px; }
+  .rec-btn .rec-btn-text { display: inline; }
 
   /* 可点区域至少 44px，字号不小于 15px */
   .app :is(a, button, .btn, .side-item, summary, [role="button"]):not(.bnav-item):not(.tag-chip):not(.ts) { min-height: 42px; font-size: 14.5px; }
@@ -1204,6 +1244,64 @@ html.is-ios .app { padding-bottom: calc(env(safe-area-inset-bottom) + 4px); } /*
   .app.side-narrow:not(.side-drawer) .side-toggle { position: static; transform: none; opacity: 1; border: none; box-shadow: none; background: transparent; display: grid; }
   .app.side-narrow.side-drawer .side-toggle { position: static; }
   .bottom-nav { display: none; }
+}
+
+/* ---------- 昼夜自适应：跟随手机系统深色 / 浅色模式 ---------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0e17;
+    --card: #141927;
+    --line: rgba(255, 255, 255, 0.11);
+    --line-soft: rgba(255, 255, 255, 0.06);
+    --seg: #1b2236;
+    --hover: #1e263b;
+    --text: #f3f5fa;
+    --text-2: #d6dbe6;
+    --muted: #959eb3;
+    --muted-2: #667085;
+    --black: #2563eb;
+    --blue: #60a5fa;
+    --blue-soft: rgba(59, 130, 246, 0.16);
+    --shadow-pill: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-pop: 0 16px 44px -12px rgba(0, 0, 0, 0.65);
+  }
+  ::selection { background: rgba(59, 130, 246, 0.35); }
+  .btn.primary { background: #2563eb; border-color: #2563eb; color: #ffffff; }
+  .btn.primary:hover { background: #1d4ed8; }
+  .rec-btn { background: #2563eb; color: #ffffff; box-shadow: 0 8px 24px -6px rgba(37, 99, 235, 0.5); }
+  .hero-head h1 { color: var(--text); }
+  .aurora { background: linear-gradient(125deg, #101b36, #161d3a 55%, #0f2433); }
+  .aurora .b1 { opacity: 0.42; }
+  .aurora .b2 { opacity: 0.45; }
+  .aurora .b3 { opacity: 0.35; }
+  .aurora .b4 { opacity: 0.35; }
+  .glass-ring { background: rgba(96, 165, 250, 0.25); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.04), 0 24px 60px -24px rgba(0, 0, 0, 0.7); }
+  .glass-ring::before { background: conic-gradient(from 0deg, #3b82f6, #6366f1, #8b5cf6, #1e293b, #22d3ee, #3b82f6); }
+  .glass { background: #141927; }
+  .glass .title-input:focus, .glass .hot-input:focus { background: rgba(59, 130, 246, 0.12); box-shadow: inset 0 -2px 0 #3b82f6; }
+  .glass .title-input::placeholder { color: #667085; }
+  .quick-item .ico { color: var(--text-2); }
+  .quick-item.quick-import { border-color: rgba(96, 165, 250, 0.45); }
+  .m-pill.ok { background: rgba(18, 183, 106, 0.18); color: #34d399; }
+  .m-pill.warn { background: rgba(247, 144, 9, 0.18); color: #fbbf24; }
+  .bottom-nav { background: rgba(17, 21, 34, 0.92); border-top-color: rgba(255, 255, 255, 0.08); }
+  .bnav-badge { box-shadow: 0 0 0 2px #111522; }
+  .player { background: rgba(20, 25, 39, 0.88); }
+  .play { background: #2563eb; color: #fff; }
+  .md { color: var(--text-2); }
+  .md th { background: #192033; }
+  .turn:hover { background: #1a2135; }
+  .turn.playing { background: rgba(59, 130, 246, 0.15); }
+  .turn.marked { background: rgba(245, 158, 11, 0.14); }
+  .turn .text { color: var(--text); }
+  .status.ok { background: rgba(18, 183, 106, 0.18); color: #34d399; }
+  .err-box { background: rgba(240, 68, 56, 0.15); color: #fca5a5; }
+  .toast { background: #1e263b; color: #f3f5fa; border: 1px solid var(--line); }
+  .toast.error { background: #b42318; border-color: #f04438; color: #fff; }
+  .stream { background: #101522; }
+  .fb-branch { background: #1b2236; }
+  .fb-branch[role=button]:hover, .fb-branch.open { background: #222b44; }
+  .fb-src { background: #141927; }
 }
 
 /* ---------- 手机端细节（第二轮）---------- */

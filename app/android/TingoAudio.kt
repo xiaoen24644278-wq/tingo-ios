@@ -424,6 +424,12 @@ object TingoAudio {
     @JvmStatic fun htmlToPdf(htmlPath: String, outPdf: String): Int {
         val ctx = appContext
         if (ctx == null) { setErr("拿不到 App 上下文，无法导出 PDF"); return -1 }
+        val html = try {
+            File(htmlPath).readText(Charsets.UTF_8)
+        } catch (t: Throwable) {
+            setErr("读取排版 HTML 失败：${t.message}")
+            return -1
+        }
         val latch = CountDownLatch(1)
         val result = intArrayOf(-1)
         Handler(Looper.getMainLooper()).post {
@@ -431,52 +437,56 @@ object TingoAudio {
                 val pageW = 595   // A4 @72dpi
                 val pageH = 842
                 val web = WebView(ctx)
+                // 软件渲染层：未挂载到窗口的 WebView 必须关掉硬件加速，否则 PdfDocument.canvas 画出来是空白
+                web.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
                 web.settings.javaScriptEnabled = false
+                web.settings.allowFileAccess = true
                 web.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
-                        try {
-                            val w = view ?: throw IllegalStateException("WebView 为空")
-                            // 按 A4 宽度重新布局，高度取内容高度
-                            val widthSpec = android.view.View.MeasureSpec.makeMeasureSpec(pageW, android.view.View.MeasureSpec.EXACTLY)
-                            val heightSpec = android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
-                            w.measure(widthSpec, heightSpec)
-                            val contentH = w.measuredHeight.coerceAtLeast(pageH)
-                            w.layout(0, 0, pageW, contentH)
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            try {
+                                val w = view ?: throw IllegalStateException("WebView 为空")
+                                val widthSpec = android.view.View.MeasureSpec.makeMeasureSpec(pageW, android.view.View.MeasureSpec.EXACTLY)
+                                val heightSpec = android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
+                                w.measure(widthSpec, heightSpec)
+                                val contentH = w.measuredHeight.coerceAtLeast(pageH)
+                                w.layout(0, 0, pageW, contentH)
 
-                            val doc = android.graphics.pdf.PdfDocument()
-                            var top = 0
-                            var pageNo = 1
-                            while (top < contentH) {
-                                val info = android.graphics.pdf.PdfDocument.PageInfo
-                                    .Builder(pageW, pageH, pageNo).create()
-                                val page = doc.startPage(info)
-                                val canvas = page.canvas
-                                canvas.save()
-                                canvas.translate(0f, -top.toFloat())
-                                w.draw(canvas)
-                                canvas.restore()
-                                doc.finishPage(page)
-                                top += pageH
-                                pageNo++
-                                if (pageNo > 200) break     // 保险丝
+                                val doc = android.graphics.pdf.PdfDocument()
+                                var top = 0
+                                var pageNo = 1
+                                while (top < contentH) {
+                                    val info = android.graphics.pdf.PdfDocument.PageInfo
+                                        .Builder(pageW, pageH, pageNo).create()
+                                    val page = doc.startPage(info)
+                                    val canvas = page.canvas
+                                    canvas.save()
+                                    canvas.translate(0f, -top.toFloat())
+                                    w.draw(canvas)
+                                    canvas.restore()
+                                    doc.finishPage(page)
+                                    top += pageH
+                                    pageNo++
+                                    if (pageNo > 200) break
+                                }
+                                val out = File(outPdf)
+                                out.parentFile?.mkdirs()
+                                out.outputStream().use { doc.writeTo(it) }
+                                doc.close()
+                                if (out.length() == 0L) {
+                                    setErr("导出 PDF 失败：文件为空")
+                                } else {
+                                    result[0] = 0
+                                }
+                            } catch (t: Throwable) {
+                                setErr("导出 PDF 失败：${t.message}")
+                            } finally {
+                                latch.countDown()
                             }
-                            val out = File(outPdf)
-                            out.parentFile?.mkdirs()
-                            out.outputStream().use { doc.writeTo(it) }
-                            doc.close()
-                            if (out.length() == 0L) {
-                                setErr("导出 PDF 失败：文件为空")
-                            } else {
-                                result[0] = 0
-                            }
-                        } catch (t: Throwable) {
-                            setErr("导出 PDF 失败：${t.message}")
-                        } finally {
-                            latch.countDown()
-                        }
+                        }, 150L)
                     }
                 }
-                web.loadUrl("file://$htmlPath")
+                web.loadDataWithBaseURL(null, html, "text/html", "utf-8", null)
             } catch (t: Throwable) {
                 setErr("导出 PDF 失败：${t.message}")
                 latch.countDown()

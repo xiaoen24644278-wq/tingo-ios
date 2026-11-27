@@ -14,6 +14,7 @@
 import AVFoundation
 import CoreMedia
 import UIKit
+import WebKit
 
 // MARK: - 错误传递（Rust 每 5 秒轮询一次，取走即清空）
 
@@ -603,45 +604,108 @@ private final class TingPDFRenderer: UIPrintPageRenderer {
     override var printableRect: CGRect { printable }
 }
 
+private final class TingPDFWebDelegate: NSObject, WKNavigationDelegate {
+    private let paper: CGRect
+    private let outPdf: String
+    private let onDone: (Int32) -> Void
+    private var finished = false
+
+    init(paper: CGRect, outPdf: String, onDone: @escaping (Int32) -> Void) {
+        self.paper = paper
+        self.outPdf = outPdf
+        self.onDone = onDone
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard !finished else { return }
+        finished = true
+        // 等一帧让排版和脚本完成
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            let renderer = TingPDFRenderer(paper: self.paper, margin: 36)
+            renderer.addPrintFormatter(webView.viewPrintFormatter(), startingAtPageAt: 0)
+            renderer.prepare(forDrawingPages: NSRange(location: 0, length: max(1, renderer.numberOfPages)))
+            let pdfRenderer = UIGraphicsPDFRenderer(bounds: self.paper)
+            do {
+                try pdfRenderer.writePDF(to: URL(fileURLWithPath: self.outPdf)) { ctx in
+                    let pages = max(1, renderer.numberOfPages)
+                    for i in 0..<pages {
+                        ctx.beginPage()
+                        renderer.drawPage(at: i, in: self.paper)
+                    }
+                }
+                if FileManager.default.fileExists(atPath: self.outPdf) {
+                    self.onDone(0)
+                } else {
+                    setError("导出 PDF 失败：未生成文件")
+                    self.onDone(-1)
+                }
+            } catch {
+                setError("导出 PDF 失败：\(error.localizedDescription)")
+                self.onDone(-1)
+            }
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard !finished else { return }
+        finished = true
+        setError("导出 PDF 加载失败：\(error.localizedDescription)")
+        onDone(-1)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard !finished else { return }
+        finished = true
+        setError("导出 PDF 加载失败：\(error.localizedDescription)")
+        onDone(-1)
+    }
+}
+
 @_cdecl("tingo_ios_html_to_pdf")
 public func tingo_ios_html_to_pdf(_ htmlPath: UnsafePointer<CChar>?, _ outPdf: UnsafePointer<CChar>?) -> Int32 {
     guard let htmlPath = cString(htmlPath), let outPdf = cString(outPdf) else {
         setError("排版参数为空")
         return -1
     }
-    var result: Int32 = 0
-    let render = {
-        guard let html = try? String(contentsOfFile: htmlPath, encoding: .utf8) else {
-            setError("读不了要排版的 HTML")
-            result = -1
-            return
-        }
-        try? FileManager.default.removeItem(atPath: outPdf)
-        // A4 @ 72 dpi
-        let paper = CGRect(x: 0, y: 0, width: 595.2, height: 841.8)
-        let renderer = TingPDFRenderer(paper: paper, margin: 36)
-        let formatter = UIMarkupTextPrintFormatter(markupText: html)
-        formatter.perPageContentInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-        renderer.addPrintFormatter(formatter, startingAtPageAt: 0)
+    guard let html = try? String(contentsOfFile: htmlPath, encoding: .utf8) else {
+        setError("读不了要排版的 HTML")
+        return -1
+    }
+    try? FileManager.default.removeItem(atPath: outPdf)
 
-        UIGraphicsBeginPDFContextToFile(outPdf, paper, nil)
-        defer { UIGraphicsEndPDFContext() }
-        renderer.prepare(forDrawingPages: NSRange(location: 0, length: renderer.numberOfPages))
-        let pages = max(1, renderer.numberOfPages)
-        for i in 0..<pages {
-            UIGraphicsBeginPDFPage()
-            renderer.drawPage(at: i, in: paper)
+    // A4 @ 72 dpi
+    let paper = CGRect(x: 0, y: 0, width: 595.2, height: 841.8)
+    let sem = DispatchSemaphore(value: 0)
+    var result: Int32 = -1
+    var holdWeb: WKWebView?
+    var holdDelegate: TingPDFWebDelegate?
+
+    DispatchQueue.main.async {
+        let cfg = WKWebViewConfiguration()
+        let web = WKWebView(frame: CGRect(x: 0, y: 0, width: paper.width - 72, height: paper.height - 72), configuration: cfg)
+        let del = TingPDFWebDelegate(paper: paper, outPdf: outPdf) { code in
+            result = code
+            holdWeb = nil
+            holdDelegate = nil
+            sem.signal()
         }
-        if !FileManager.default.fileExists(atPath: outPdf) {
-            setError("导出 PDF 失败")
-            result = -1
+        web.navigationDelegate = del
+        holdWeb = web
+        holdDelegate = del
+        web.loadHTMLString(html, baseURL: nil)
+    }
+
+    if sem.wait(timeout: .now() + 30) == .timedOut {
+        DispatchQueue.main.async {
+            holdWeb?.stopLoading()
+            holdWeb = nil
+            holdDelegate = nil
         }
+        setError("导出 PDF 超时")
+        return -1
     }
-    if Thread.isMainThread {
-        render()
-    } else {
-        DispatchQueue.main.sync(execute: render)
-    }
+    _ = holdWeb
+    _ = holdDelegate
     return result
 }
 

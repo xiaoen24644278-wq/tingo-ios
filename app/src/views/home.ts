@@ -25,20 +25,29 @@ export function renderHome(): void {
     return;
   }
   leaveRecording();
+  const modelReady = !needsModels();
+  const mark = document.querySelector(".brand-mark")?.innerHTML ?? "";
   main().innerHTML = `
     <div class="page home-page">
-      <div class="hero-head">
-        <span class="hero-tag"><b></b>${t("本地转写 · 录音不出本机", "On-device transcription · audio never leaves your Mac")}</span>
-        <h1>${t("开个会，纪要交给我", "Have the meeting. HuiT takes the notes.")}</h1>
-        <p>${t("录下会议，自动转写、区分说话人，整理出议题、决议和待办", "Record, transcribe, tell speakers apart — and get topics, decisions and action items")}</p>
-      </div>
+      ${
+        isMobile()
+          ? `<div class="m-top">
+              <div class="m-brand"><span class="m-logo">${mark}</span><b>会听</b><small>HuiT</small></div>
+              <a class="m-pill ${modelReady ? "ok" : "warn"}" href="#/settings/asr"><i></i>${modelReady ? t("模型已就绪", "Model ready") : t("模型未下载", "Model needed")}</a>
+            </div>`
+          : `<div class="hero-head">
+              <span class="hero-tag"><b></b>${t("本地转写 · 录音不出本机", "On-device transcription · audio never leaves your Mac")}</span>
+              <h1>${t("开个会，纪要交给我", "Have the meeting. HuiT takes the notes.")}</h1>
+              <p>${t("录下会议，自动转写、区分说话人，整理出议题、决议和待办", "Record, transcribe, tell speakers apart — and get topics, decisions and action items")}</p>
+            </div>`
+      }
       <section class="aurora" id="aurora">
         <div class="aurora-colors" aria-hidden="true"><i class="blob b1"></i><i class="blob b2"></i><i class="blob b3"></i><i class="blob b4"></i><i class="grain"></i></div>
         <div class="glass-ring"><div class="glass" id="glass"></div></div>
       </section>
       <div class="home-tasks" id="homeTasks"></div>
       <div class="quick">
-        <div class="quick-item" id="qImport"><span class="ico">${ICON.upload}</span><span><b>${t("导入录音", "Import recording")}</b><small>${isMobile() ? t("选音频或视频文件", "Choose audio or video") : t("拖进窗口，或点这里选文件", "Drop it in, or click to choose a file")}</small></span>${ICON.chevron}</div>
+        <div class="quick-item quick-import" id="qImport"><span class="ico">${ICON.upload}</span><span><b>${isMobile() ? t("导入已有录音 / 视频", "Import audio or video") : t("导入录音", "Import recording")}</b><small>${isMobile() ? t("支持 m4a、mp3、wav、mp4 等格式", "m4a, mp3, wav, mp4 and more") : t("拖进窗口，或点这里选文件", "Drop it in, or click to choose a file")}</small></span>${ICON.chevron}</div>
         <a class="quick-item" href="#/meetings"><span class="ico">${ICON.file}</span><span><b>${t("会议记录", "Meetings")}</b><small id="qCount">${t("查看全部会议", "See all meetings")}</small></span>${ICON.chevron}</a>
         <a class="quick-item" href="#/settings/llm"><span class="ico">${ICON.bot}</span><span><b>${t("大模型", "LLM")}</b><small id="qModel">${t("设置纪要用的模型", "Choose the model that writes minutes")}</small></span>${ICON.chevron}</a>
         <a class="quick-item" href="#/settings/push"><span class="ico">${ICON.send}</span><span><b>${t("推送到群", "Share to chat")}</b><small>${t("飞书 · 钉钉 · 企业微信", "Feishu · DingTalk · WeCom")}</small></span>${ICON.chevron}</a>
@@ -126,14 +135,15 @@ function idleForm(): string {
   const sys = S.env ? S.env.system_audio : true;
   return `
     ${micBanner()}
+    ${isMobile() ? `<div class="glass-kicker">${t("本地转写 · 隐私不出设备", "On-device · Private")}</div>` : ""}
     <input class="title-input" id="fTitle" placeholder="${t("会议名称，比如：周会、项目评审", "Meeting name, e.g. Weekly sync, Design review")}" value="${esc(S.form.title)}" maxlength="60">
     <input class="hot-input" id="fHot" placeholder="${t("热词（可选）：人名、项目代号、专有名词，用逗号隔开", "Hotwords (optional): names, project codes, jargon — comma separated")}" value="${esc(S.form.hotwords)}">
     <div class="glass-foot">
       ${isMobile() ? "" : `<button class="toggle ${S.form.system && sys ? "on" : ""}" id="tSys" aria-pressed="${Boolean(S.form.system && sys)}" ${sys ? "" : `disabled title='${t("需要 macOS 15+", "Requires macOS 15+")}'`}>${ICON.monitor}${t("系统声音", "System audio")}</button>`}
       <button class="toggle ${S.form.mic ? "on" : ""}" id="tMic" aria-pressed="${Boolean(S.form.mic)}">${ICON.mic}${t("麦克风", "Microphone")}</button>
       <span class="spacer"></span>
-      <span class="rec-label">${t("开始录音", "Record")}</span>
-      <button class="rec-btn" id="recBtn" aria-label="${t("开始录音", "Start recording")}" title="${t("开始录音", "Start recording")}"><span class="core" aria-hidden="true"></span></button>
+      <span class="rec-label" id="recLabelDesktop">${t("开始录音", "Record")}</span>
+      <button class="rec-btn" id="recBtn" aria-label="${t("开始录音", "Start recording")}" title="${t("开始录音", "Start recording")}"><span class="core" aria-hidden="true"></span><span class="rec-btn-text" id="recBtnText">${t("开始现场录音", "Start recording")}</span></button>
     </div>`;
 }
 
@@ -222,18 +232,17 @@ async function startRecording(): Promise<void> {
   if (btn) {
     btn.disabled = true;
     btn.setAttribute("aria-busy", "true");
-    const label = btn.previousElementSibling;
-    if (label) label.textContent = t("正在启动…", "Starting…");
   }
-  // 录音请求最慢的一步是首次加载识别模型（几十秒）。这里每秒查一次 /api/diag，
-  // 把「正在加载模型 / 正在打开麦克风」写到按钮左边，避免用户以为点了没反应。
   const startedAt = performance.now();
-  const labelEl = btn?.previousElementSibling as HTMLElement | null;
+  const labelDesktop = $maybe("#recLabelDesktop");
+  const labelMobile = $maybe("#recBtnText");
   const setStage = (text: string) => {
-    if (labelEl) labelEl.textContent = text;
+    if (labelDesktop) labelDesktop.textContent = text;
+    if (labelMobile) labelMobile.textContent = text;
   };
+  setStage(t("正在启动…", "Starting…"));
   let diagTimer = 0;
-  if (labelEl) {
+  if (labelDesktop || labelMobile) {
     diagTimer = window.setInterval(async () => {
       const secs = Math.round((performance.now() - startedAt) / 1000);
       try {
@@ -263,12 +272,11 @@ async function startRecording(): Promise<void> {
   } catch (e) {
     toast(errorMessage(e), true);
     if (diagTimer) window.clearInterval(diagTimer);
-    setStage(t("开始录音", "Record"));
+    if (labelDesktop) labelDesktop.textContent = t("开始录音", "Record");
+    if (labelMobile) labelMobile.textContent = t("开始现场录音", "Start recording");
     if (btn) {
       btn.disabled = false;
       btn.removeAttribute("aria-busy");
-      const label = btn.previousElementSibling;
-      if (label) label.textContent = t("开始录音", "Record");
     }
   }
 }
