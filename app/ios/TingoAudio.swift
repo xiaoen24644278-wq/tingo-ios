@@ -13,6 +13,7 @@
 
 import AVFoundation
 import CoreMedia
+import MediaPlayer
 import UIKit
 import WebKit
 
@@ -806,6 +807,43 @@ public func tingo_ios_keep_alive(_ active: Int32) -> Int32 {
         KeepAliveManager.shared.acquire()
     } else {
         KeepAliveManager.shared.release()
+    }
+    return 0
+}
+
+// MARK: - 灵动岛与锁屏实时状态（MPNowPlayingInfoCenter，兼容免费 Apple ID 自签）
+
+private var remoteEventsRegistered = false
+
+@_cdecl("tingo_ios_set_live_status")
+public func tingo_ios_set_live_status(
+    _ title: UnsafePointer<CChar>?,
+    _ subtitle: UnsafePointer<CChar>?,
+    _ progress: Double,
+    _ active: Int32
+) -> Int32 {
+    let titleStr = cString(title) ?? "会听 HuiT"
+    let subStr = cString(subtitle) ?? ""
+    DispatchQueue.main.async {
+        let center = MPNowPlayingInfoCenter.default()
+        if active == 0 {
+            center.nowPlayingInfo = nil
+            return
+        }
+        if !remoteEventsRegistered {
+            remoteEventsRegistered = true
+            UIApplication.shared.beginReceivingRemoteControlEvents()
+        }
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: titleStr,
+            MPMediaItemPropertyArtist: subStr.isEmpty ? "会听 HuiT" : subStr,
+            MPNowPlayingInfoPropertyPlaybackRate: 1.0,
+        ]
+        if progress >= 0.0 && progress <= 1.0 {
+            info[MPMediaItemPropertyPlaybackDuration] = 100.0
+            info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = progress * 100.0
+        }
+        center.nowPlayingInfo = info
     }
     return 0
 }

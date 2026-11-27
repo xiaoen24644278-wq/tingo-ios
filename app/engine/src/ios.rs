@@ -34,6 +34,8 @@ extern "C" {
     fn tingo_ios_html_to_pdf(html_path: *const c_char, out_pdf: *const c_char) -> c_int;
     /// 后台任务保活与前台防自动息屏（1=开启，0=释放）。
     fn tingo_ios_keep_alive(active: c_int) -> c_int;
+    /// 更新灵动岛与锁屏实时状态（progress 0..=1，负值表示无进度条）。
+    fn tingo_ios_set_live_status(title: *const c_char, subtitle: *const c_char, progress: f64, active: c_int) -> c_int;
 }
 
 fn err() -> String {
@@ -140,5 +142,13 @@ pub fn html_to_pdf(html: &Path, out: &Path) -> Result<(), String> {
 pub fn set_keep_alive(active: bool) {
     unsafe {
         tingo_ios_keep_alive(if active { 1 } else { 0 });
+    }
+}
+
+pub fn set_live_status(title: &str, subtitle: &str, progress: f64, active: bool) {
+    let Ok(t) = CString::new(title) else { return };
+    let Ok(s) = CString::new(subtitle) else { return };
+    unsafe {
+        tingo_ios_set_live_status(t.as_ptr(), s.as_ptr(), progress, if active { 1 } else { 0 });
     }
 }

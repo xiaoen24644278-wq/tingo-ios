@@ -1131,6 +1131,11 @@ html.is-ios .app { padding-bottom: calc(env(safe-area-inset-bottom) + 4px); } /*
   /* 内容区：单列 + 适配手机阅读留白，底部留出导航栏高度 */
   .main { padding: 0; grid-template-columns: minmax(0, 1fr); }
   .page { max-width: 100%; padding: 16px 14px calc(88px + max(12px, env(safe-area-inset-bottom))); grid-template-columns: minmax(0, 1fr); }
+  .card, .m-card { border-radius: 18px; }
+  .m-card { padding: 15px 16px; min-height: 0; gap: 7px; }
+  .m-card h3 { font-size: 15.5px; }
+  .search .input { height: 40px; border-radius: 99px; }
+  .detail-head h1 { font-size: 20px; }
   .doc { padding: 16px 14px; }
   .grid, .steps, .set-layout, .fb-body, .s-row2, .wl-perm, .sp-row, .history-layout {
     grid-template-columns: minmax(0, 1fr);

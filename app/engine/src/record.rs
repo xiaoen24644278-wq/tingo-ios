@@ -374,6 +374,14 @@ pub fn set_keep_alive(active: bool) { crate::android::set_keep_alive(active) }
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn set_keep_alive(_active: bool) {}
 
+/// iOS 灵动岛与锁屏实时状态同步。
+#[cfg(target_os = "ios")]
+pub fn set_live_status(title: &str, subtitle: &str, progress: f64, active: bool) {
+    crate::ios::set_live_status(title, subtitle, progress, active)
+}
+#[cfg(not(target_os = "ios"))]
+pub fn set_live_status(_title: &str, _subtitle: &str, _progress: f64, _active: bool) {}
+
 // ============ 试录与错误分类（两个平台共用） ============
 
 /// 试录 `secs` 秒（录进临时目录，录完就删），返回每条音轨（system / mic）最响那段的音量（0～1）；

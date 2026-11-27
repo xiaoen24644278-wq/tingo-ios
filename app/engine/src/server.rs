@@ -448,6 +448,8 @@ impl AppState {
             jobs.retain(|j| !drop.contains(&j.id));
         }
         jobs.push(job);
+        drop(jobs);
+        self.sync_live_status();
         Ok(())
     }
 
@@ -455,6 +457,7 @@ impl AppState {
         if let Some(j) = self.jobs.lock().unwrap().iter_mut().find(|j| j.id == id) {
             f(j);
         }
+        self.sync_live_status();
     }
 
     fn fail(&self, id: &str, e: impl Into<String>) {
@@ -465,6 +468,58 @@ impl AppState {
             j.finished_at = now();
             j.error = e;
         });
+    }
+
+    /// 把当前最高优先级的活跃任务同步到 iOS 灵动岛 / 锁屏实时状态栏
+    fn sync_live_status(&self) {
+        let jobs = self.jobs.lock().unwrap();
+        let active = jobs
+            .iter()
+            .find(|j| j.state == "recording")
+            .or_else(|| jobs.iter().rev().find(|j| j.busy()));
+        let Some(j) = active else {
+            drop(jobs);
+            record::set_live_status("", "", -1.0, false);
+            return;
+        };
+        let meeting_name = j
+            .meeting
+            .splitn(3, '_')
+            .nth(2)
+            .unwrap_or(&j.meeting)
+            .replace('_', " ");
+        let sub = if meeting_name.is_empty() {
+            "会听 HuiT".to_string()
+        } else {
+            format!("会听 · {meeting_name}")
+        };
+        let (title, pct) = match j.state.as_str() {
+            "recording" => ("🎙️ 正在录音 · 实时转写中".to_string(), -1.0),
+            "loading" => ("正在加载识别模型…".to_string(), 0.06),
+            "transcribing" => {
+                let p = j.stage.trim_end_matches('%').parse::<f64>().unwrap_or(0.0) / 100.0;
+                (
+                    if j.stage.is_empty() { "正在转写录音…".to_string() } else { format!("正在转写 · {}", j.stage) },
+                    (0.08 + 0.42 * p).clamp(0.0, 1.0),
+                )
+            }
+            "summarizing" => (
+                if j.thinking > 0 && j.minutes.is_empty() {
+                    format!("AI 思考中 · {} 字", j.thinking)
+                } else {
+                    "正在生成会议纪要…".to_string()
+                },
+                0.75,
+            ),
+            "downloading" => (
+                if j.stage.is_empty() { "正在下载识别模型…".to_string() } else { format!("下载模型 · {}", j.stage) },
+                -1.0,
+            ),
+            "finalizing" => ("正在收尾转写与声纹聚类…".to_string(), 0.92),
+            _ => ("正在保存与解析录音…".to_string(), 0.04),
+        };
+        drop(jobs);
+        record::set_live_status(&title, &sub, pct, true);
     }
 
     /// 生成纪要：流式写进 job.minutes，写完存到会议文件夹。`extra` 是这场会议额外填的热词。
@@ -1807,6 +1862,7 @@ fn record_test_run(bin: &Path, secs: u64) -> Value {
 }
 
 async fn import_file(State(s): State<Shared>, mut form: Multipart) -> ApiResult<Json<Job>> {
+    record::set_live_status("正在导入上传录音…", "会听 HuiT · 接收文件", 0.05, true);
     let (mut data, mut filename, mut title, mut modified) =
         (None, String::from("录音.m4a"), String::new(), 0f64);
     while let Some(field) = form.next_field().await.map_err(|e| bad(e.to_string()))? {
