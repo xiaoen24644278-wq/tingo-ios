@@ -30,11 +30,61 @@ struct Backend {
     engine: Mutex<Option<Arc<server::AppState>>>,
     url: Mutex<Option<String>>,
     error: Mutex<Option<String>>,
+    rebind_lock: Mutex<()>,
 }
 
-/// 界面启动时调用：等后端起来，返回它的地址。
+fn spawn_server_on(engine: Arc<server::AppState>, state: Arc<Backend>) {
+    std::thread::spawn(move || {
+        let rt = match tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+        {
+            Ok(rt) => rt,
+            Err(e) => {
+                *state.error.lock().unwrap() = Some(format!("启动本地服务失败：{e}"));
+                return;
+            }
+        };
+        rt.block_on(async move {
+            match server::serve_state(engine, 0).await {
+                Ok((port, serve)) => {
+                    *state.url.lock().unwrap() = Some(format!("http://127.0.0.1:{port}"));
+                    serve.await;
+                }
+                Err(e) => *state.error.lock().unwrap() = Some(format!("启动本地服务失败：{e}")),
+            }
+        });
+    });
+}
+
+fn url_alive(url: &str) -> bool {
+    let Some(addr) = url.strip_prefix("http://") else { return false };
+    let Ok(sock) = addr.parse::<std::net::SocketAddr>() else { return false };
+    std::net::TcpStream::connect_timeout(&sock, Duration::from_millis(250)).is_ok()
+}
+
+/// 界面启动或从后台恢复时调用：等后端起来，若 iOS 挂起期间回收了监听端口则原地重绑，返回最新地址。
 #[tauri::command]
 async fn backend_url(state: State<'_, Arc<Backend>>) -> Result<String, String> {
+    if let Some(url) = state.url.lock().unwrap().clone() {
+        let check_url = url.clone();
+        let alive = tauri::async_runtime::spawn_blocking(move || url_alive(&check_url))
+            .await
+            .unwrap_or(false);
+        if alive {
+            return Ok(url);
+        }
+        // iOS 长时间锁屏挂起后可能回收了旧的监听 socket：保留同一个 AppState 重绑端口
+        let _guard = state.rebind_lock.lock().unwrap();
+        let current = state.url.lock().unwrap().clone();
+        if current.as_deref() == Some(url.as_str()) {
+            if let Some(engine) = state.engine.lock().unwrap().clone() {
+                *state.url.lock().unwrap() = None;
+                spawn_server_on(engine, state.inner().clone());
+            }
+        }
+    }
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
         if let Some(url) = state.url.lock().unwrap().clone() {
@@ -96,28 +146,7 @@ fn start_backend(app: &tauri::App, state: Arc<Backend>) -> Result<(), String> {
     };
     let engine = server::AppState::new(opt);
     *state.engine.lock().unwrap() = Some(engine.clone());
-    std::thread::spawn(move || {
-        let rt = match tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .build()
-        {
-            Ok(rt) => rt,
-            Err(e) => {
-                *state.error.lock().unwrap() = Some(format!("启动本地服务失败：{e}"));
-                return;
-            }
-        };
-        rt.block_on(async move {
-            match server::serve_state(engine, 0).await {
-                Ok((port, serve)) => {
-                    *state.url.lock().unwrap() = Some(format!("http://127.0.0.1:{port}"));
-                    serve.await;
-                }
-                Err(e) => *state.error.lock().unwrap() = Some(format!("启动本地服务失败：{e}")),
-            }
-        });
-    });
+    spawn_server_on(engine, state);
     Ok(())
 }
 

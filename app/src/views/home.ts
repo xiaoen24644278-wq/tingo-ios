@@ -38,7 +38,7 @@ export function renderHome(): void {
       </section>
       <div class="home-tasks" id="homeTasks"></div>
       <div class="quick">
-        <div class="quick-item" id="qImport"><span class="ico">${ICON.upload}</span><span><b>${t("导入录音", "Import recording")}</b><small>${t("拖进窗口，或点这里选文件", "Drop it in, or click to choose a file")}</small></span>${ICON.chevron}</div>
+        <div class="quick-item" id="qImport"><span class="ico">${ICON.upload}</span><span><b>${t("导入录音", "Import recording")}</b><small>${isMobile() ? t("选音频或视频文件", "Choose audio or video") : t("拖进窗口，或点这里选文件", "Drop it in, or click to choose a file")}</small></span>${ICON.chevron}</div>
         <a class="quick-item" href="#/meetings"><span class="ico">${ICON.file}</span><span><b>${t("会议记录", "Meetings")}</b><small id="qCount">${t("查看全部会议", "See all meetings")}</small></span>${ICON.chevron}</a>
         <a class="quick-item" href="#/settings/llm"><span class="ico">${ICON.bot}</span><span><b>${t("大模型", "LLM")}</b><small id="qModel">${t("设置纪要用的模型", "Choose the model that writes minutes")}</small></span>${ICON.chevron}</a>
         <a class="quick-item" href="#/settings/push"><span class="ico">${ICON.send}</span><span><b>${t("推送到群", "Share to chat")}</b><small>${t("飞书 · 钉钉 · 企业微信", "Feishu · DingTalk · WeCom")}</small></span>${ICON.chevron}</a>
@@ -131,7 +131,6 @@ function idleForm(): string {
     <div class="glass-foot">
       ${isMobile() ? "" : `<button class="toggle ${S.form.system && sys ? "on" : ""}" id="tSys" aria-pressed="${Boolean(S.form.system && sys)}" ${sys ? "" : `disabled title='${t("需要 macOS 15+", "Requires macOS 15+")}'`}>${ICON.monitor}${t("系统声音", "System audio")}</button>`}
       <button class="toggle ${S.form.mic ? "on" : ""}" id="tMic" aria-pressed="${Boolean(S.form.mic)}">${ICON.mic}${t("麦克风", "Microphone")}</button>
-      ${isMobile() ? `<button class="toggle import-chip" id="tImport" type="button">${ICON.upload}${t("导入录音", "Import audio")}</button>` : ""}
       <span class="spacer"></span>
       <span class="rec-label">${t("开始录音", "Record")}</span>
       <button class="rec-btn" id="recBtn" aria-label="${t("开始录音", "Start recording")}" title="${t("开始录音", "Start recording")}"><span class="core" aria-hidden="true"></span></button>
@@ -204,8 +203,6 @@ function bindHome(phase: Phase): void {
       (e.currentTarget as HTMLElement).classList.toggle("on", S.form.mic);
       (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(S.form.mic));
     };
-    const impToggle = $maybe<HTMLElement>("#tImport");
-    if (impToggle) impToggle.onclick = () => $("#fileInput").click();
     $("#recBtn").onclick = startRecording;
   } else if (phase === "error") {
     $("#againBtn").onclick = async () => {

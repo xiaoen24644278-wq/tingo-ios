@@ -42,8 +42,11 @@ function bindVisibilityResume(): void {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       wakeLockSentinel = null;
-      void poll();
-      refreshMeetings();
+      // 回到前台后稍等 150ms 让 WKWebView 网络恢复，再同步任务与列表
+      window.setTimeout(() => {
+        void poll();
+        refreshMeetings();
+      }, 150);
     }
   });
 }

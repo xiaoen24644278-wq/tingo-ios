@@ -405,6 +405,12 @@ final class MicRecorder {
         return (stoppedAt ?? Date()).timeIntervalSince(start)
     }
 
+    var isRunning: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return running
+    }
+
     /// 结束录音时把最后一笔错误也交给 Rust 侧（比如写盘失败发生在 stop 之前）。
     func drainError() -> String { takeError() }
 }
@@ -707,18 +713,15 @@ final class KeepAliveManager {
 
     private func startSilentAudioIfNeeded() {
         // 如果正在录音，MicRecorder 已经激活了 AVAudioSession，无需静音播放器
-        if MicRecorder.shared.elapsed() > 0 && silentPlayer != nil { return }
+        if MicRecorder.shared.isRunning { return }
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(
-                .playAndRecord,
-                mode: .default,
-                options: [.mixWithOthers, .defaultToSpeaker, .allowBluetooth]
-            )
+            // 纯后台处理用 .playback + .mixWithOthers，避免系统在无录音时回收 .playAndRecord 会话
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
             try session.setActive(true)
             let player = try AVAudioPlayer(data: silentWavData(), fileTypeHint: AVFileType.wav.rawValue)
             player.numberOfLoops = -1
-            player.volume = 0.0
+            player.volume = 0.01
             player.prepareToPlay()
             player.play()
             silentPlayer = player

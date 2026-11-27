@@ -15,11 +15,16 @@ concurrency:
 
 jobs:
   build-apk:
-    name: 构建 HuiT APK
+    name: 构建 HuiT APK (${{ matrix.abi }})
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64, x86_64]
     env:
       CI: true
+      ABIS: ${{ matrix.abi }}
       CARGO_NET_RETRY: "10"
       CARGO_HTTP_TIMEOUT: "120"
       CARGO_HTTP_MULTIPLEXING: "false"
@@ -97,7 +102,7 @@ jobs:
       - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
-          name: HuiT-android-apk
-          path: build/android/*.apk
+          name: HuiT-android-${{ matrix.abi }}-apk
+          path: build/android/HuiT-android-${{ matrix.abi }}.apk
           retention-days: 14
           if-no-files-found: error

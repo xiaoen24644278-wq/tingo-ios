@@ -199,10 +199,11 @@ APKSIGNER="$(ls "${SDK}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1
 if [[ -f "${KEYSTORE}" && -n "${APKSIGNER}" ]]; then
   for apk in "${OUT_DIR}"/*unsigned*.apk; do
     [[ -f "${apk}" ]] || continue
-    signed="${OUT_DIR}/HuiT-android.apk"
+    signed="${OUT_DIR}/${APK_NAME:-HuiT-android-${first_abi}.apk}"
     if "${APKSIGNER}" sign --ks "${KEYSTORE}" --ks-pass "pass:${KS_PASS}" \
         --key-pass "pass:${KS_PASS}" --out "${signed}" "${apk}" 2>/dev/null; then
       log "已签名：${signed}"
+      rm -f "${apk}"
     else
       warn "签名失败：${apk}（产物仍是 unsigned，需要手动签名）"
     fi

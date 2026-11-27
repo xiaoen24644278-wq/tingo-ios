@@ -177,10 +177,27 @@ export async function api<T = Record<string, unknown>>(path: string, opts: ApiOp
     init.body = JSON.stringify(json);
   }
   init.headers = headers;
-  const res = await fetch(url(path), init);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : t(`请求失败（${res.status}）`, `Request failed (${res.status})`));
-  return data as T;
+
+  let lastErr: unknown;
+  // iOS 长时间锁屏后回到前台时，WKWebView 网络进程或本地 socket 可能刚恢复，第一次 fetch 常报 "Load failed"。
+  // 对非 FormData 的幂等/常规请求自动重连并重试，无缝恢复。
+  const maxAttempts = init.body instanceof FormData ? 1 : 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url(path), init);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : t(`请求失败（${res.status}）`, `Request failed (${res.status})`));
+      return data as T;
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      const isNetworkErr = e instanceof TypeError || /load failed|failed to fetch|network/i.test(msg);
+      if (!isNetworkErr || attempt + 1 >= maxAttempts) throw e;
+      await new Promise((r) => setTimeout(r, 200 * (attempt + 1)));
+      await initApi().catch(() => {});
+    }
+  }
+  throw lastErr;
 }
 
 export const meetingPath = (id: string, sub = ""): string => `/api/meetings/${encodeURIComponent(id)}${sub}`;
