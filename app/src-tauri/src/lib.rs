@@ -67,7 +67,8 @@ fn url_alive(url: &str) -> bool {
 /// 界面启动或从后台恢复时调用：等后端起来，若 iOS 挂起期间回收了监听端口则原地重绑，返回最新地址。
 #[tauri::command]
 async fn backend_url(state: State<'_, Arc<Backend>>) -> Result<String, String> {
-    if let Some(url) = state.url.lock().unwrap().clone() {
+    let existing = { state.url.lock().unwrap().clone() };
+    if let Some(url) = existing {
         let check_url = url.clone();
         let alive = tauri::async_runtime::spawn_blocking(move || url_alive(&check_url))
             .await
