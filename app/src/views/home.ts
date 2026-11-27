@@ -16,6 +16,8 @@ const INIT: Job = { state: "idle" };
 const phaseOf = (j: Job): Phase =>
   j.state === "recording" ? "recording" : j.kind === "models" && isBusy(j) ? "downloading" : j.kind === "models" && j.state === "error" ? "error" : "idle";
 
+const isPhone = (): boolean => isMobile() || window.innerWidth <= 820;
+
 export function renderHome(): void {
   // 录音中：整页换成录音工作台
   if (phaseOf(S.job) === "recording") {
@@ -25,12 +27,13 @@ export function renderHome(): void {
     return;
   }
   leaveRecording();
+  const mobile = isPhone();
   const modelReady = !needsModels();
   const mark = document.querySelector(".brand-mark")?.innerHTML ?? "";
   main().innerHTML = `
     <div class="page home-page">
       ${
-        isMobile()
+        mobile
           ? `<div class="m-top">
               <div class="m-brand"><span class="m-logo">${mark}</span><b>会听</b><small>HuiT</small></div>
               <a class="m-pill ${modelReady ? "ok" : "warn"}" href="#/settings/asr"><i></i>${modelReady ? t("模型已就绪", "Model ready") : t("模型未下载", "Model needed")}</a>
@@ -46,16 +49,17 @@ export function renderHome(): void {
         <div class="glass-ring"><div class="glass" id="glass"></div></div>
       </section>
       <div class="home-tasks" id="homeTasks"></div>
-      <div class="quick">
-        <div class="quick-item quick-import" id="qImport"><span class="ico">${ICON.upload}</span><span><b>${isMobile() ? t("导入已有录音 / 视频", "Import audio or video") : t("导入录音", "Import recording")}</b><small>${isMobile() ? t("支持 m4a、mp3、wav、mp4 等格式", "m4a, mp3, wav, mp4 and more") : t("拖进窗口，或点这里选文件", "Drop it in, or click to choose a file")}</small></span>${ICON.chevron}</div>
-        <a class="quick-item" href="#/meetings"><span class="ico">${ICON.file}</span><span><b>${t("会议记录", "Meetings")}</b><small id="qCount">${t("查看全部会议", "See all meetings")}</small></span>${ICON.chevron}</a>
-        <a class="quick-item" href="#/settings/llm"><span class="ico">${ICON.bot}</span><span><b>${t("大模型", "LLM")}</b><small id="qModel">${t("设置纪要用的模型", "Choose the model that writes minutes")}</small></span>${ICON.chevron}</a>
-        <a class="quick-item" href="#/settings/push"><span class="ico">${ICON.send}</span><span><b>${t("推送到群", "Share to chat")}</b><small>${t("飞书 · 钉钉 · 企业微信", "Feishu · DingTalk · WeCom")}</small></span>${ICON.chevron}</a>
+      <div class="quick ${mobile ? "quick-plan-a" : ""}">
+        <div class="quick-item quick-import" id="qImport"><span class="ico">${ICON.upload}</span><span><b>${mobile ? t("导入已有录音 / 视频", "Import audio or video") : t("导入录音", "Import recording")}</b><small>${mobile ? t("支持 m4a、mp3、wav、mp4", "m4a, mp3, wav, mp4") : t("拖进窗口，或点这里选文件", "Drop it in, or click to choose a file")}</small></span>${ICON.chevron}</div>
+        ${mobile ? "" : `<a class="quick-item" href="#/meetings"><span class="ico">${ICON.file}</span><span><b>${t("会议记录", "Meetings")}</b><small id="qCount">${t("查看全部会议", "See all meetings")}</small></span>${ICON.chevron}</a>`}
+        <a class="quick-item" href="#/settings/llm"><span class="ico">${ICON.bot}</span><span><b>${mobile ? t("纪要大模型", "LLM") : t("大模型", "LLM")}</b><small id="qModel">${t("设置纪要用的模型", "Choose the model that writes minutes")}</small></span>${ICON.chevron}</a>
+        <a class="quick-item" href="#/settings/push"><span class="ico">${ICON.send}</span><span><b>${mobile ? t("群机器人推送", "Share to chat") : t("推送到群", "Share to chat")}</b><small>${mobile ? t("飞书 · 钉钉", "Feishu · DingTalk") : t("飞书 · 钉钉 · 企业微信", "Feishu · DingTalk · WeCom")}</small></span>${ICON.chevron}</a>
       </div>
     </div>`;
   $("#qImport").onclick = () => $("#fileInput").click();
-  if (S.meetings.length) $("#qCount").textContent = t(`共 ${S.meetings.length} 场会议`, `${S.meetings.length} meetings`);
-  if (S.env) $("#qModel").textContent = S.env.llm_ready ? t(`当前：${S.env.llm_model}`, `Using ${S.env.llm_model}`) : t("还没有配置", "Not set up yet");
+  const qCount = $maybe("#qCount");
+  if (qCount && S.meetings.length) qCount.textContent = t(`共 ${S.meetings.length} 场会议`, `${S.meetings.length} meetings`);
+  if (S.env) $("#qModel").textContent = S.env.llm_ready ? (mobile ? S.env.llm_model : t(`当前：${S.env.llm_model}`, `Using ${S.env.llm_model}`)) : t("还没有配置", "Not set up yet");
   updateHome(S.job, INIT, true);
   renderTasks();
 }
@@ -132,15 +136,17 @@ function bindMicFix(): void {
 
 function idleForm(): string {
   if (needsModels()) return downloadPanel();
+  const mobile = isPhone();
   const sys = S.env ? S.env.system_audio : true;
+  const hasHot = !!S.form.hotwords.trim();
   return `
     ${micBanner()}
-    ${isMobile() ? `<div class="glass-kicker">${t("本地转写 · 隐私不出设备", "On-device · Private")}</div>` : ""}
-    <input class="title-input" id="fTitle" placeholder="${t("会议名称，比如：周会、项目评审", "Meeting name, e.g. Weekly sync, Design review")}" value="${esc(S.form.title)}" maxlength="60">
-    <input class="hot-input" id="fHot" placeholder="${t("热词（可选）：人名、项目代号、专有名词，用逗号隔开", "Hotwords (optional): names, project codes, jargon — comma separated")}" value="${esc(S.form.hotwords)}">
+    ${mobile ? `<div class="glass-kicker">${t("本地转写 · 隐私不出设备", "On-device · Private")}</div>` : ""}
+    <input class="title-input" id="fTitle" placeholder="${mobile ? t("输入会议名称（如：产品周会）", "Meeting title (e.g. Weekly sync)") : t("会议名称，比如：周会、项目评审", "Meeting name, e.g. Weekly sync, Design review")}" value="${esc(S.form.title)}" maxlength="60">
+    ${mobile ? `<div class="m-chips"><button type="button" class="toggle ${hasHot ? "on" : ""}" id="tHotToggle">+ ${t("热词", "Hotwords")}</button><button class="toggle ${S.form.mic ? "on" : ""}" id="tMic" aria-pressed="${Boolean(S.form.mic)}">${ICON.mic}${S.form.mic ? t("麦克风已开", "Mic on") : t("麦克风已关", "Mic off")}</button></div>` : ""}
+    <input class="hot-input" id="fHot" ${mobile && !hasHot ? "hidden" : ""} placeholder="${t("热词（可选）：人名、项目代号、专有名词，用逗号隔开", "Hotwords (optional): names, project codes, jargon — comma separated")}" value="${esc(S.form.hotwords)}">
     <div class="glass-foot">
-      ${isMobile() ? "" : `<button class="toggle ${S.form.system && sys ? "on" : ""}" id="tSys" aria-pressed="${Boolean(S.form.system && sys)}" ${sys ? "" : `disabled title='${t("需要 macOS 15+", "Requires macOS 15+")}'`}>${ICON.monitor}${t("系统声音", "System audio")}</button>`}
-      <button class="toggle ${S.form.mic ? "on" : ""}" id="tMic" aria-pressed="${Boolean(S.form.mic)}">${ICON.mic}${t("麦克风", "Microphone")}</button>
+      ${mobile ? "" : `<button class="toggle ${S.form.system && sys ? "on" : ""}" id="tSys" aria-pressed="${Boolean(S.form.system && sys)}" ${sys ? "" : `disabled title='${t("需要 macOS 15+", "Requires macOS 15+")}'`}>${ICON.monitor}${t("系统声音", "System audio")}</button><button class="toggle ${S.form.mic ? "on" : ""}" id="tMic" aria-pressed="${Boolean(S.form.mic)}">${ICON.mic}${t("麦克风", "Microphone")}</button>`}
       <span class="spacer"></span>
       <span class="rec-label" id="recLabelDesktop">${t("开始录音", "Record")}</span>
       <button class="rec-btn" id="recBtn" aria-label="${t("开始录音", "Start recording")}" title="${t("开始录音", "Start recording")}"><span class="core" aria-hidden="true"></span><span class="rec-btn-text" id="recBtnText">${t("开始现场录音", "Start recording")}</span></button>
@@ -208,11 +214,24 @@ function bindHome(phase: Phase): void {
         (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(S.form.system));
       };
     }
-    $("#tMic").onclick = (e) => {
-      S.form.mic = !S.form.mic;
-      (e.currentTarget as HTMLElement).classList.toggle("on", S.form.mic);
-      (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(S.form.mic));
-    };
+    const micBtn = $maybe<HTMLElement>("#tMic");
+    if (micBtn) {
+      micBtn.onclick = (e) => {
+        S.form.mic = !S.form.mic;
+        const el = e.currentTarget as HTMLElement;
+        el.classList.toggle("on", S.form.mic);
+        el.setAttribute("aria-pressed", String(S.form.mic));
+        if (isPhone()) el.innerHTML = `${ICON.mic}${S.form.mic ? t("麦克风已开", "Mic on") : t("麦克风已关", "Mic off")}`;
+      };
+    }
+    const hotToggle = $maybe<HTMLElement>("#tHotToggle");
+    if (hotToggle) {
+      hotToggle.onclick = () => {
+        hot.hidden = !hot.hidden;
+        hotToggle.classList.toggle("on", !hot.hidden);
+        if (!hot.hidden) hot.focus();
+      };
+    }
     $("#recBtn").onclick = startRecording;
   } else if (phase === "error") {
     $("#againBtn").onclick = async () => {
