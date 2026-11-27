@@ -638,3 +638,107 @@ public func tingo_ios_html_to_pdf(_ htmlPath: UnsafePointer<CChar>?, _ outPdf: U
     }
     return result
 }
+
+// MARK: - 后台任务保活与屏幕防休眠（转写 / 生成纪要 / 下载模型期间防息屏与后台挂起）
+
+/// 生成一段静音 WAV（16 kHz 单声道 16 bit，1 秒），供后台保活播放器循环播放。
+private func silentWavData() -> Data {
+    let samples = kSampleRate // 1 秒静音
+    let bytes = UInt32(samples * 2)
+    var d = wavHeader(sampleBytes: bytes)
+    d.append(Data(count: Int(bytes)))
+    return d
+}
+
+final class KeepAliveManager {
+    static let shared = KeepAliveManager()
+
+    private let lock = NSLock()
+    private var activeCount = 0
+    private var bgTask: UIBackgroundTaskIdentifier = .invalid
+    private var silentPlayer: AVAudioPlayer?
+
+    private init() {}
+
+    func acquire() {
+        lock.lock()
+        activeCount += 1
+        let first = (activeCount == 1)
+        lock.unlock()
+        guard first else { return }
+
+        DispatchQueue.main.async {
+            // 1. 前台防自动息屏
+            UIApplication.shared.isIdleTimerDisabled = true
+            // 2. 申请系统后台任务配额
+            self.beginBgTask()
+            // 3. 若当前未在录音，启用静音保活音频会话（配合 UIBackgroundModes=audio，锁屏或切后台也不被挂起）
+            self.startSilentAudioIfNeeded()
+        }
+    }
+
+    func release() {
+        lock.lock()
+        activeCount = max(0, activeCount - 1)
+        let last = (activeCount == 0)
+        lock.unlock()
+        guard last else { return }
+
+        DispatchQueue.main.async {
+            UIApplication.shared.isIdleTimerDisabled = false
+            self.stopSilentAudio()
+            self.endBgTask()
+        }
+    }
+
+    private func beginBgTask() {
+        if bgTask != .invalid { return }
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "TingoBackgroundProcessing") { [weak self] in
+            self?.endBgTask()
+        }
+    }
+
+    private func endBgTask() {
+        guard bgTask != .invalid else { return }
+        let id = bgTask
+        bgTask = .invalid
+        UIApplication.shared.endBackgroundTask(id)
+    }
+
+    private func startSilentAudioIfNeeded() {
+        // 如果正在录音，MicRecorder 已经激活了 AVAudioSession，无需静音播放器
+        if MicRecorder.shared.elapsed() > 0 && silentPlayer != nil { return }
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [.mixWithOthers, .defaultToSpeaker, .allowBluetooth]
+            )
+            try session.setActive(true)
+            let player = try AVAudioPlayer(data: silentWavData(), fileTypeHint: AVFileType.wav.rawValue)
+            player.numberOfLoops = -1
+            player.volume = 0.0
+            player.prepareToPlay()
+            player.play()
+            silentPlayer = player
+        } catch {
+            // 静音保活失败不阻塞主流程
+        }
+    }
+
+    private func stopSilentAudio() {
+        silentPlayer?.stop()
+        silentPlayer = nil
+    }
+}
+
+@_cdecl("tingo_ios_keep_alive")
+public func tingo_ios_keep_alive(_ active: Int32) -> Int32 {
+    if active != 0 {
+        KeepAliveManager.shared.acquire()
+    } else {
+        KeepAliveManager.shared.release()
+    }
+    return 0
+}

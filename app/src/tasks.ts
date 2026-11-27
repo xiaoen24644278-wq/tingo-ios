@@ -71,6 +71,22 @@ export function renderTasks(): void {
     }
     homeLabel.parentElement?.classList.toggle("recording", recording);
   }
+  const bnavHome = $maybe('#bottomNav [data-bnav="home"] [data-t]');
+  if (bnavHome) {
+    const [zh, en] = recording ? ["录音中", "Recording"] : ["新会议", "Record"];
+    const label = t(zh, en);
+    if (bnavHome.textContent !== label) {
+      bnavHome.dataset.t = `${zh}|${en}`;
+      bnavHome.textContent = label;
+    }
+    bnavHome.parentElement?.classList.toggle("recording", recording);
+  }
+  const bnavBadge = $maybe("#bnavBadge");
+  if (bnavBadge) {
+    const busyCount = S.jobs.filter((j) => isBusy(j) && j.state !== "recording").length;
+    bnavBadge.hidden = busyCount === 0;
+    if (busyCount > 0) bnavBadge.textContent = String(busyCount);
+  }
   // 侧边栏收成图标栏时：后台任务并成一个图标（录音本身显示在「新会议」按钮上）
   const rail = $maybe<HTMLAnchorElement>("#railTasks");
   if (rail) {

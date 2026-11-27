@@ -250,3 +250,7 @@ pub fn html_to_pdf(html: &std::path::Path, out: &std::path::Path) -> Result<(), 
         Err(err_from(&mut env, "htmlToPdf"))
     }
 }
+
+pub fn set_keep_alive(active: bool) {
+    let _ = call_int("setKeepAlive", "(I)I", &[JValue::Int(if active { 1 } else { 0 })]);
+}

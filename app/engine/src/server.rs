@@ -21,7 +21,7 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::services::ServeFile;
 
 use crate::asr::{AsrKind, Engine, ModelPaths};
-use crate::chunked::{transcribe_samples, wav_path, LiveTranscriber};
+use crate::chunked::{transcribe_samples_cached, wav_path, LiveTranscriber};
 use crate::config::{self, Config};
 use crate::i18n::{self, tr, Lang};
 use crate::meetings::{self, AUDIO, MINUTES, TRANSCRIPT_JSON};
@@ -518,13 +518,21 @@ impl AppState {
         Ok(())
     }
 
-    /// 处理录音文件：解码 → 分段转写 → 存转写 → 生成纪要。
+    /// 处理录音文件：解码 → 分段转写（支持断点续转） → 存转写 → 生成纪要。
+    /// 若该会议已有完整 transcript.json（上次仅纪要生成被中断），直接跳到生成纪要。
     fn run_process(&self, id: &str, audio_path: &Path, dir: &Path, extra: &[String]) -> Result<(), String> {
+        let tr_path = dir.join(TRANSCRIPT_JSON);
+        if let Ok(existing) = Transcript::load(&tr_path) {
+            if !existing.sentences.is_empty() {
+                return self.run_summarize(id, &existing, dir, extra);
+            }
+        }
         self.update(id, |j| j.state = "loading".into());
         let engine = self.engine()?;
         self.update(id, |j| j.state = "transcribing".into());
         let samples = record::decode(&self.opt.recorder_bin, audio_path)?;
-        let tr = transcribe_samples(&engine, &samples, audio_path, |f| {
+        let checkpoint = dir.join("transcript.part");
+        let tr = transcribe_samples_cached(&engine, &samples, audio_path, Some(&checkpoint), |f| {
             self.update(id, |j| j.stage = format!("{:.0}%", f * 100.0))
         })?;
         self.update(id, |j| j.stage.clear());
@@ -536,15 +544,31 @@ impl AppState {
     }
 }
 
+struct KeepAliveGuard;
+impl KeepAliveGuard {
+    fn new() -> Self {
+        record::set_keep_alive(true);
+        Self
+    }
+}
+impl Drop for KeepAliveGuard {
+    fn drop(&mut self) {
+        record::set_keep_alive(false);
+    }
+}
+
 fn spawn_job(state: &Shared, id: &str, work: impl FnOnce(&AppState, &str) -> Result<(), String> + Send + 'static) {
     let s = state.clone();
     let id = id.to_string();
-    std::thread::spawn(move || match work(&s, &id) {
-        Ok(()) => s.update(&id, |j| {
-            j.state = "done".into();
-            j.finished_at = now();
-        }),
-        Err(e) => s.fail(&id, e),
+    std::thread::spawn(move || {
+        let _keep_alive = KeepAliveGuard::new();
+        match work(&s, &id) {
+            Ok(()) => s.update(&id, |j| {
+                j.state = "done".into();
+                j.finished_at = now();
+            }),
+            Err(e) => s.fail(&id, e),
+        }
     });
 }
 

@@ -13,6 +13,41 @@ import { updateSettingsJob } from "./views/settings";
 let timer: number | undefined;
 const IDLE: Job = { state: "idle" };
 
+/* ---------- Web Wake Lock & 亮屏秒恢复 ----------
+   配合原生层的 UIApplication.isIdleTimerDisabled + UIBackgroundTask，在 WebView 层也申请 screen wakeLock，
+   并在手机亮屏 / 回到前台（visibilitychange）时立即重拉 /api/jobs 和当前详情页，避免息屏后画面停留在旧状态。 */
+let wakeLockSentinel: { release: () => Promise<void> } | null = null;
+let visibilityBound = false;
+
+async function syncWakeLock(active: boolean): Promise<void> {
+  const nav = navigator as Navigator & {
+    wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void> }> };
+  };
+  if (!nav.wakeLock) return;
+  try {
+    if (active && !wakeLockSentinel && document.visibilityState === "visible") {
+      wakeLockSentinel = await nav.wakeLock.request("screen");
+    } else if (!active && wakeLockSentinel) {
+      await wakeLockSentinel.release();
+      wakeLockSentinel = null;
+    }
+  } catch {
+    wakeLockSentinel = null;
+  }
+}
+
+function bindVisibilityResume(): void {
+  if (visibilityBound) return;
+  visibilityBound = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      wakeLockSentinel = null;
+      void poll();
+      refreshMeetings();
+    }
+  });
+}
+
 async function fetchJobs(): Promise<Job[]> {
   try {
     return (await api<{ jobs: Job[] }>("/api/jobs")).jobs;
@@ -24,6 +59,7 @@ async function fetchJobs(): Promise<Job[]> {
 }
 
 export async function poll(): Promise<void> {
+  bindVisibilityResume();
   window.clearTimeout(timer);
   let jobs: Job[];
   try {
@@ -67,5 +103,7 @@ export async function poll(): Promise<void> {
     });
   }
   const rec = jobs.some((j) => j.state === "recording");
-  timer = window.setTimeout(poll, rec ? 160 : jobs.some(isBusy) ? 500 : 2500);
+  const anyBusy = rec || jobs.some(isBusy);
+  void syncWakeLock(anyBusy);
+  timer = window.setTimeout(poll, rec ? 160 : anyBusy ? 500 : 2500);
 }

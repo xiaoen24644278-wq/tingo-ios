@@ -366,6 +366,14 @@ pub fn request_mic() -> Result<(), String> { crate::android::setup() }
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 pub fn request_mic() -> Result<(), String> { Ok(()) }
 
+/// 后台任务保活与屏幕防休眠（转写 / 生成纪要 / 下载模型期间防手机自动息屏导致任务被挂起）。
+#[cfg(target_os = "ios")]
+pub fn set_keep_alive(active: bool) { crate::ios::set_keep_alive(active) }
+#[cfg(target_os = "android")]
+pub fn set_keep_alive(active: bool) { crate::android::set_keep_alive(active) }
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+pub fn set_keep_alive(_active: bool) {}
+
 // ============ 试录与错误分类（两个平台共用） ============
 
 /// 试录 `secs` 秒（录进临时目录，录完就删），返回每条音轨（system / mic）最响那段的音量（0～1）；

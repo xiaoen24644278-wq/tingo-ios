@@ -114,7 +114,7 @@ export async function renderDetail(id: string, keepTab = false, at?: number): Pr
               : ""
           }
           ${d.has_transcript && !jobHere ? `<button class="btn" id="aRegen">${ICON.redo}${d.minutes ? t("重新生成", "Regenerate") : t("生成纪要", "Write minutes")}</button>` : ""}
-          <button class="btn ghost" id="aFolder" title="${t("打开文件夹", "Open folder")}">${ICON.folder}</button>
+          ${isMobile() ? "" : `<button class="btn ghost" id="aFolder" title="${t("打开文件夹", "Open folder")}">${ICON.folder}</button>`}
           <div class="menu-wrap"><button class="btn ghost" id="aMore" title="${t("更多", "More")}">···</button>
             <div class="menu" id="moreMenu" hidden>
               <button data-act="tags">${ICON.spark}<span><b>${t("编辑标签", "Edit tags")}</b><small>${t("按项目、类型给会议分类", "Group meetings by project or type")}</small></span></button>
@@ -152,8 +152,8 @@ export async function renderDetail(id: string, keepTab = false, at?: number): Pr
         ${
           jobHere
             ? `<div class="card doc" id="pane"></div>`
-            : `<div class="card"><div class="empty"><h3>${t("录音还没有转写", "Not transcribed yet")}</h3><div>${t("可能是上次处理被打断了", "The last run may have been interrupted")}</div>
-          ${d.audio ? `<button class="btn primary" id="aProcess">${t("开始转写", "Transcribe")}</button>` : ""}</div></div>`
+            : `<div class="card"><div class="empty"><h3>${t("录音还没有转写", "Not transcribed yet")}</h3><div>${t("已保留上次识别进度，点下面按钮可接着转写", "Previous progress is saved — tap below to resume transcription")}</div>
+          ${d.audio ? `<button class="btn primary" id="aProcess">${t("继续转写并生成纪要", "Resume transcription & minutes")}</button>` : ""}</div></div>`
         }`
       }
       ${d.audio ? playerHTML() : ""}
@@ -616,9 +616,9 @@ function bindMoreMenu(d: MeetingDetail): void {
 
 function exportMenuItems(): string {
   return `<button data-act="pdf">${ICON.file}<span><b>${t("导出 PDF", "Export PDF")}</b><small>${t("A4 排版，存进会议文件夹", "A4 layout, saved in the meeting folder")}</small></span></button>
-                    <button data-act="docx">${ICON.edit}<span><b>${t("导出 Word", "Export Word")}</b><small>${t("可以接着改的 .docx", "An editable .docx")}</small></span></button>
+                    ${isMobile() ? "" : `<button data-act="docx">${ICON.edit}<span><b>${t("导出 Word", "Export Word")}</b><small>${t("可以接着改的 .docx", "An editable .docx")}</small></span></button>`}
                     <button data-act="srt">${ICON.play}<span><b>${t("导出 SRT 字幕", "Export SRT subtitles")}</b><small>${t("带说话人的逐句字幕", "Line-by-line subtitles with speakers")}</small></span></button>
-                    <button data-act="obsidian">${ICON.vault}<span><b>${t("存到 Obsidian", "Save to Obsidian")}</b><small>${t("存进笔记库并打开", "Save to your vault and open it")}</small></span></button>
+                    ${isMobile() ? "" : `<button data-act="obsidian">${ICON.vault}<span><b>${t("存到 Obsidian", "Save to Obsidian")}</b><small>${t("存进笔记库并打开", "Save to your vault and open it")}</small></span></button>`}
                     <button data-act="copy">${ICON.copy}<span><b>${t("复制为 Markdown", "Copy as Markdown")}</b><small>${t("粘贴到文档、邮件里", "Paste into docs or email")}</small></span></button>`;
 }
 

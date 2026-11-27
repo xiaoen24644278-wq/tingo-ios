@@ -177,18 +177,68 @@ pub fn transcribe_samples(
     engine: &Engine,
     audio: &[f32],
     source: &Path,
+    progress: impl FnMut(f64),
+) -> Result<Transcript, String> {
+    transcribe_samples_cached(engine, audio, source, None, progress)
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct TranscribeCheckpoint {
+    total_samples: usize,
+    processed_samples: usize,
+    segments: Vec<Segment>,
+}
+
+/// 带断点续转缓存的分段转写：每识别完一段就写入 `checkpoint` 文件；
+/// 若中途因息屏/进程被杀中断，下次重试时自动跳过已识别的样本接着转，完成后删除缓存。
+pub fn transcribe_samples_cached(
+    engine: &Engine,
+    audio: &[f32],
+    source: &Path,
+    checkpoint: Option<&Path>,
     mut progress: impl FnMut(f64),
 ) -> Result<Transcript, String> {
     let total = audio.len() as f64 / SR as f64;
     let mut c = Chunker::default();
-    c.feed(audio);
+    if let Some(cp_path) = checkpoint {
+        if let Ok(text) = std::fs::read_to_string(cp_path) {
+            if let Ok(cp) = serde_json::from_str::<TranscribeCheckpoint>(&text) {
+                if cp.total_samples == audio.len() && cp.processed_samples < audio.len() {
+                    c.drained = cp.processed_samples;
+                    c.pending_start = cp.processed_samples as f64 / SR as f64;
+                    c.segments = cp.segments;
+                    c.feed(&audio[cp.processed_samples..]);
+                    if total > 0.0 {
+                        progress((c.processed_s() / total).min(1.0));
+                    }
+                }
+            }
+        }
+    }
+    if c.pending.is_empty() && c.drained == 0 {
+        c.feed(audio);
+    }
     while let Some((chunk, offset)) = c.next_chunk(false).or_else(|| c.next_chunk(true)) {
         c.transcribe(engine, &chunk, offset)?;
+        if let Some(cp_path) = checkpoint {
+            let cp = TranscribeCheckpoint {
+                total_samples: audio.len(),
+                processed_samples: c.drained,
+                segments: c.segments.clone(),
+            };
+            if let Ok(bytes) = serde_json::to_vec(&cp) {
+                let _ = std::fs::write(cp_path, bytes);
+            }
+        }
         if total > 0.0 {
             progress((c.processed_s() / total).min(1.0));
         }
     }
-    Ok(c.assemble(source))
+    let tr = c.assemble(source);
+    if let Some(cp_path) = checkpoint {
+        let _ = std::fs::remove_file(cp_path);
+    }
+    Ok(tr)
 }
 
 /// 录音进行中读取录音组件正在写的音轨，边录边转。

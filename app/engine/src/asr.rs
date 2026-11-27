@@ -132,7 +132,7 @@ impl ModelPaths {
 }
 
 /// 一段语音的识别结果（时间是整段音频里的绝对毫秒）。
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Segment {
     pub start_ms: u64,
     pub end_ms: u64,

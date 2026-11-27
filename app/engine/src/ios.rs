@@ -32,6 +32,8 @@ extern "C" {
     fn tingo_ios_encode_aac(input_wav: *const c_char, out_m4a: *const c_char) -> c_int;
     /// 排好版的 HTML 文件 → A4 PDF（UIMarkupTextPrintFormatter）。
     fn tingo_ios_html_to_pdf(html_path: *const c_char, out_pdf: *const c_char) -> c_int;
+    /// 后台任务保活与前台防自动息屏（1=开启，0=释放）。
+    fn tingo_ios_keep_alive(active: c_int) -> c_int;
 }
 
 fn err() -> String {
@@ -132,5 +134,11 @@ pub fn html_to_pdf(html: &Path, out: &Path) -> Result<(), String> {
     match unsafe { tingo_ios_html_to_pdf(i.as_ptr(), o.as_ptr()) } {
         0 => Ok(()),
         _ => Err(err()),
+    }
+}
+
+pub fn set_keep_alive(active: bool) {
+    unsafe {
+        tingo_ios_keep_alive(if active { 1 } else { 0 });
     }
 }

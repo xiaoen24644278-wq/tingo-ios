@@ -485,4 +485,32 @@ object TingoAudio {
         if (!latch.await(90, TimeUnit.SECONDS)) { setErr("导出 PDF 超时"); return -1 }
         return result[0]
     }
+
+    // ---------- 后台 CPU 保活（PARTIAL_WAKE_LOCK） ----------
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private var keepAliveCount = 0
+
+    @JvmStatic @Synchronized fun setKeepAlive(active: Int): Int {
+        if (active != 0) {
+            keepAliveCount++
+            if (keepAliveCount == 1) {
+                try {
+                    val ctx = appContext ?: return 0
+                    val pm = ctx.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager ?: return 0
+                    val wl = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "HuiT:BackgroundJob")
+                    wl.acquire(60 * 60 * 1000L) // 最长 1 小时保护
+                    wakeLock = wl
+                } catch (_: Throwable) {}
+            }
+        } else {
+            keepAliveCount = (keepAliveCount - 1).coerceAtLeast(0)
+            if (keepAliveCount == 0) {
+                try {
+                    wakeLock?.let { if (it.isHeld) it.release() }
+                } catch (_: Throwable) {}
+                wakeLock = null
+            }
+        }
+        return 0
+    }
 }

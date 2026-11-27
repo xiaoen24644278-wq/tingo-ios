@@ -2,10 +2,10 @@
    进度显示在玻璃面板下方和侧边栏。第一次使用时玻璃面板里下载识别模型。另含拖拽导入。 */
 
 import { t } from "../i18n";
-import { api, isMobile, type Job } from "../api";
+import { api, isMobile, url, type Job } from "../api";
 import { $, $maybe, errorMessage, esc, ICON, main, toast } from "../dom";
 import { poll } from "../poll";
-import { refreshEnv } from "../sidebar";
+import { refreshEnv, refreshMeetings } from "../sidebar";
 import { isBusy, needsModels, S } from "../state";
 import { dismissJob, renderTasks } from "../tasks";
 import { isRecordingPage, leaveRecording, renderRecording, updateRecording } from "./recording";
@@ -131,6 +131,7 @@ function idleForm(): string {
     <div class="glass-foot">
       ${isMobile() ? "" : `<button class="toggle ${S.form.system && sys ? "on" : ""}" id="tSys" aria-pressed="${Boolean(S.form.system && sys)}" ${sys ? "" : `disabled title='${t("需要 macOS 15+", "Requires macOS 15+")}'`}>${ICON.monitor}${t("系统声音", "System audio")}</button>`}
       <button class="toggle ${S.form.mic ? "on" : ""}" id="tMic" aria-pressed="${Boolean(S.form.mic)}">${ICON.mic}${t("麦克风", "Microphone")}</button>
+      ${isMobile() ? `<button class="toggle import-chip" id="tImport" type="button">${ICON.upload}${t("导入录音", "Import audio")}</button>` : ""}
       <span class="spacer"></span>
       <span class="rec-label">${t("开始录音", "Record")}</span>
       <button class="rec-btn" id="recBtn" aria-label="${t("开始录音", "Start recording")}" title="${t("开始录音", "Start recording")}"><span class="core" aria-hidden="true"></span></button>
@@ -203,6 +204,8 @@ function bindHome(phase: Phase): void {
       (e.currentTarget as HTMLElement).classList.toggle("on", S.form.mic);
       (e.currentTarget as HTMLElement).setAttribute("aria-pressed", String(S.form.mic));
     };
+    const impToggle = $maybe<HTMLElement>("#tImport");
+    if (impToggle) impToggle.onclick = () => $("#fileInput").click();
     $("#recBtn").onclick = startRecording;
   } else if (phase === "error") {
     $("#againBtn").onclick = async () => {
@@ -301,18 +304,81 @@ async function stopRecording(): Promise<void> {
 
 /* ---------- 导入 ---------- */
 
+function showImportBanner(name: string, pct: number, stageText: string): void {
+  const box = $maybe("#homeTasks");
+  if (!box) return;
+  let card = $maybe("#importProgressCard", box);
+  if (!card) {
+    card = document.createElement("div");
+    card.id = "importProgressCard";
+    card.className = "task big importing";
+    box.prepend(card);
+  }
+  card.innerHTML = `
+    <span class="task-ico"><span class="task-spin"></span></span>
+    <span class="task-main">
+      <span class="task-title">${esc(name)}</span>
+      <span class="task-detail">${esc(stageText)}</span>
+      <span class="task-bar"><i style="width:${Math.max(4, pct)}%"></i></span>
+    </span>
+    <span class="task-pct">${Math.round(pct)}%</span>`;
+}
+
+function clearImportBanner(): void {
+  $maybe("#importProgressCard")?.remove();
+}
+
 export async function importFile(file: File | undefined): Promise<void> {
   if (!file) return;
+  const title = file.name.replace(/\.[^.]+$/, "");
   const fd = new FormData();
   fd.append("file", file);
-  fd.append("title", file.name.replace(/\.[^.]+$/, ""));
+  fd.append("title", title);
   fd.append("modified", String(file.lastModified || 0));
-  toast(t(`正在导入 ${file.name}`, `Importing ${file.name}`));
+
+  const sizeMb = (file.size / 1_000_000).toFixed(1);
+  showImportBanner(title, 5, t(`正在读取音频文件（${sizeMb} MB）…`, `Reading audio file (${sizeMb} MB)…`));
+  toast(t(`正在导入 ${file.name}…`, `Importing ${file.name}…`));
+
   try {
-    await api<Job>("/api/import", { method: "POST", body: fd });
-    toast(t(`已导入 ${file.name}，转写和纪要在后台进行`, `Imported ${file.name} — transcribing in the background`));
+    const job = await new Promise<Job>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url("/api/import"));
+      xhr.upload.onprogress = (ev) => {
+        if (ev.lengthComputable && ev.total > 0) {
+          const pct = Math.min(95, (ev.loaded / ev.total) * 100);
+          showImportBanner(
+            title,
+            pct,
+            pct < 92
+              ? t(`正在上传音频… ${Math.round(pct)}%（${sizeMb} MB）`, `Uploading audio… ${Math.round(pct)}% (${sizeMb} MB)`)
+              : t("正在写入本地会议目录…", "Saving to local meeting folder…"),
+          );
+        }
+      };
+      xhr.onload = () => {
+        try {
+          const data = JSON.parse(xhr.responseText || "{}");
+          if (xhr.status >= 200 && xhr.status < 300) resolve(data as Job);
+          else reject(new Error(typeof data.detail === "string" ? data.detail : t(`导入失败（${xhr.status}）`, `Import failed (${xhr.status})`)));
+        } catch (err) {
+          reject(err);
+        }
+      };
+      xhr.onerror = () => reject(new Error(t("读取或传输录音文件中断，请重试", "Audio upload interrupted — please try again")));
+      xhr.send(fd);
+    });
+    clearImportBanner();
+    S.jobs = [...S.jobs.filter((j) => j.id !== job.id), job];
+    renderTasks();
+    void refreshMeetings();
+    toast(t(`已导入「${title}」，正在转写与生成纪要`, `Imported "${title}" — transcribing and writing minutes`));
+    if (job.meeting) {
+      location.hash = `#/m/${encodeURIComponent(job.meeting)}`;
+    }
     poll();
   } catch (e) {
+    clearImportBanner();
     toast(errorMessage(e), true);
   }
 }
